@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum PhysicsState {
+﻿public enum PhysicsState {
     STATIC_PS = (1 << 0),
     UNUSED1_PS = (1 << 1),
     ETHEREAL_PS = (1 << 2),

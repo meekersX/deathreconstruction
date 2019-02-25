@@ -1,0 +1,244 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+
+namespace deathreconstruction
+{
+    class Character
+    {
+        public uint ID;
+        public int Level;
+        public string Name;
+
+        private Dictionary<uint, Item> inventory;
+        private Dictionary<uint, Item> packs;
+
+        private List<uint> unloadedItems;
+        bool initialItemsPrinted;
+
+        public Character()
+        {
+            ID = 0x0;
+            Level = 0;
+            Name = "";
+            inventory = new Dictionary<uint, Item>();
+            packs = new Dictionary<uint, Item>();
+            unloadedItems = new List<uint>();
+            initialItemsPrinted = false;
+        }
+
+        public Character (Character characterToCopy)
+        {
+            ID = characterToCopy.ID;
+            Level = characterToCopy.Level;
+            Name = characterToCopy.Name;
+            inventory = characterToCopy.inventory.ToDictionary(x => x.Key, x => x.Value.Copy());
+            packs = characterToCopy.packs.ToDictionary(x => x.Key, x => x.Value.Copy());
+
+            Debug.Assert(characterToCopy.unloadedItems.Count == 0);
+        }
+
+        public void AddItem(Item item)
+        {
+            inventory.Add(item.ID, item);
+        }
+
+        public Item AddItem(CM_Inventory.ContentProfile item)
+        {
+            Item addedItem = new Item(item.m_iid);
+            if (item.m_uContainerProperties == (uint)ContainerProperties.None)
+            {
+                inventory[item.m_iid] = addedItem;
+            }
+            else
+            {
+                packs[item.m_iid] = addedItem;
+            }
+            unloadedItems.Add(item.m_iid);
+            return addedItem;
+        }
+
+        public void AddWieldedItem(CM_Login.InventoryPlacement item)
+        {
+            unloadedItems.Add(item.iid_);
+            inventory[item.iid_] = new Item(item.iid_, ID);
+        }
+
+        public bool UpdateItem(Item item)
+        {
+            if (inventory.ContainsKey(item.ID))
+            {
+                inventory[item.ID] = item;
+            }
+            else if (packs.ContainsKey(item.ID))
+            {
+                packs[item.ID] = item;
+            }
+            else
+            {
+                return false;
+            }
+            unloadedItems.Remove(item.ID);
+            if (!initialItemsPrinted && unloadedItems.Count == 0)
+            {
+                PrintInventory();
+                initialItemsPrinted = true;
+            }
+            return true;
+        }
+
+        public bool UpdateStackSize(uint itemID, uint stackSize, uint value)
+        {
+            if (inventory.ContainsKey(itemID))
+            {
+                inventory[itemID].StackSize = stackSize;
+                inventory[itemID].Value = value;
+                return true;
+            }
+            return false;
+        }
+
+        public void WieldItem(uint itemID)
+        {
+            Debug.Assert(inventory.ContainsKey(itemID));
+            Item item = inventory[itemID];
+            item.WielderID = ID;
+            item.ContainerID = ID;
+        }
+
+        public Item FindItem(uint itemID)
+        {
+            if (inventory.ContainsKey(itemID))
+            {
+                return inventory[itemID];
+            }
+            else if (packs.ContainsKey(itemID))
+            {
+                return packs[itemID];
+            }
+            return null;
+        }
+
+        public Item RemoveItem(uint itemID)
+        {
+            Item item = FindItem(itemID);
+
+            if (item != null)
+            {
+                if (inventory.Remove(itemID))
+                {
+                }
+                else if (packs.Remove(itemID))
+                {
+                    Debug.Assert(false);
+                    foreach (Item itemInPack in inventory.Values)
+                    {
+                        if (itemInPack.ContainerID == itemID)
+                        {
+                            inventory.Remove(ID);
+                            // move to otherobjects?
+                        }
+                    }
+                }
+                return item;
+            }
+            return null;
+        }
+
+        public void AddItemToContainer(CM_Inventory.ContentProfile item, uint containerID)
+        {
+            Item addedItem = AddItem(item);
+            addedItem.ContainerID = containerID;
+        }
+
+        public Item MoveItem(uint itemID, uint containerID)
+        {
+            Item item;
+            if (inventory.ContainsKey(itemID))
+            {
+                item = inventory[itemID];
+                item.ContainerID = containerID;
+                // unwield
+                item.WielderID = 0x0;
+                if (containerID == ID || packs.ContainsKey(containerID))
+                {
+                    // moved item into a container within inventory
+                }
+                else
+                {
+                    // removed item from inventory
+                    inventory.Remove(itemID);
+                    return item;
+                }
+            }
+            else if (packs.ContainsKey(ID))
+            {
+                // moving an entire pack
+                Debug.Assert(false);
+            }
+            return null;
+        }
+
+        public List<Item> GetInventory()
+        {
+            return new List<Item>(inventory.Values);
+        }
+
+        public void PrintInventory()
+        {
+            Console.WriteLine("Main Pack");
+            foreach (Item item in inventory.Values)
+            {
+                if (item.ContainerID == ID && item.WielderID != ID)
+                {
+                    item.Print();
+                }
+            }
+            foreach (Item pack in packs.Values)
+            {
+                Console.WriteLine("Pack " + pack.Name);
+                foreach (Item item in inventory.Values)
+                {
+                    if (item.ContainerID == pack.ID)
+                    {
+                        item.Print();
+                    }
+                }
+            }
+            Console.WriteLine("Wielded");
+            foreach (Item item in inventory.Values)
+            {
+                if (item.WielderID == ID)
+                {
+                    item.Print();
+                }
+            }
+        }
+
+        public void PrintItem(uint itemID)
+        {
+            if (inventory.ContainsKey(itemID))
+            {
+                if (inventory[itemID].WielderID != 0x0)
+                {
+                    Console.Write("W ");
+                }
+                else
+                {
+                    Console.Write("I ");
+                }
+                inventory[itemID].Print();
+            }
+            else if (packs.ContainsKey(itemID))
+            {
+                Console.Write("P ");
+                packs[itemID].Print();
+            }
+            else
+            {
+                Debug.Assert(false);
+            }
+        }
+    }
+}

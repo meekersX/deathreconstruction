@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum COMBAT_MODE {
+﻿public enum COMBAT_MODE {
     UNDEF_COMBAT_MODE = 0,
     NONCOMBAT_COMBAT_MODE = (1 << 0),
     MELEE_COMBAT_MODE = (1 << 1),

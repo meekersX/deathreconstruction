@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum TeleportAnimState {
+﻿public enum TeleportAnimState {
     TAS_OFF,
     TAS_WORLD_FADE_OUT,
     TAS_TUNNEL_FADE_IN,

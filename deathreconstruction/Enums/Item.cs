@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum COMBAT_USE {
+﻿public enum COMBAT_USE {
     COMBAT_USE_NONE,
     COMBAT_USE_MELEE,
     COMBAT_USE_MISSILE,

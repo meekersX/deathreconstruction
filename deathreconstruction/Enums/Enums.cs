@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum ProgramType {
+﻿public enum ProgramType {
     Undef_ProgramType,
     Client_ProgramType,
     Server_ProgramType,

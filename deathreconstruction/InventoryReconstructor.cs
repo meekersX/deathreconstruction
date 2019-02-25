@@ -1,21 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
 using System.Diagnostics;
-using Newtonsoft.Json;
 
 namespace deathreconstruction
 {
     class InventoryReconstructor
     {
-        private Dictionary<uint, Item> inventory = new Dictionary<uint, Item>();
-        private Dictionary<uint, Item> packs = new Dictionary<uint, Item>();
-        private Dictionary<uint, Item> wielded = new Dictionary<uint, Item>();
-        private Dictionary<uint, Item> otherObjects = new Dictionary<uint, Item>();
-        private uint characterID = 0x0;
-        private int characterLevel = 0;
-        private string characterName = "";
+        Character character;
+        private Dictionary<uint, Item> otherObjects;
         List<PacketRecord> records;
 
         private void LoadFile(string fileName)
@@ -27,56 +20,39 @@ namespace deathreconstruction
             records = PCapReader.LoadPcap(fileName, true, ref searchAborted, ref isPcapng);
         }
 
-        public void Reconstruct(string fileName)
+        public List<Tuple<Character, List<uint>, string>> Reconstruct(string fileName)
         {
-            LoadFile(fileName);
-            List<int> deathIndices = FindDeaths();
+            List<Tuple<Character, List<uint>, string>> foundDeaths = new List<Tuple<Character, List<uint>, string>>();
 
-            int deathIndex = deathIndices.First<int>();
-            //int deathIndex = deathIndices.Last<int>();
+            LoadFile(fileName);
+
+            List<int> deathRecords = FindDeaths();
+            if (deathRecords.Count == 0)
+            {
+                // no valid deaths found
+                return foundDeaths;
+            }
+            int deathIndex = 0;
+            List<uint> droppedItems = null;
+            string deathText = null;
+            int lastDeathRecord = int.MaxValue;
+
+            character = new Character();
+            otherObjects = new Dictionary<uint, Item>();
 
             int i;
-            for (i = deathIndex - 1; i >= 0; i--)
+            for (i = deathRecords[deathIndex] - 1; i >= 0; i--)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
                 {
-                    PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref characterID);
+                    PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref character.ID);
                     if (opcode == PacketOpcode.PLAYER_DESCRIPTION_EVENT)
                     {
-                        CM_Login.PlayerDescription message = CM_Login.PlayerDescription.read(messageDataReader);
-                        Console.WriteLine(message.ilist.Length);
-                        // level
-                        characterName = message.CACQualities.CBaseQualities._strStatsTable.hashTable[STypeString.NAME_STRING].ToString();
-                        characterLevel = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.LEVEL_INT];
-                        // pack items
-                        foreach (CM_Inventory.ContentProfile item in message.clist.list)
-                        {
-                            if (item.m_uContainerProperties == (uint)ContainerProperties.None)
-                            {
-                                inventory[item.m_iid] = new Item(item.m_iid);
-                            }
-                            else
-                            {
-                                packs[item.m_iid] = new Item(item.m_iid);
-                            }
-
-                        }
-                        // wielded items
-                        foreach (CM_Login.InventoryPlacement item in message.ilist.list)
-                        {
-                            wielded[item.iid_] = new Item(item.iid_);
-                        }
+                        PlayerDescription(messageDataReader);
                         break;
                     }
                 }
             }
-
-            List<uint> initialItems = new List<uint>(inventory.Count);
-            foreach (uint ID in inventory.Keys)
-            {
-                initialItems.Add(ID);
-            }
-            bool initialItemsPrinted = false;
 
             for (i = i + 1; i < records.Count; i++)
             {
@@ -88,10 +64,6 @@ namespace deathreconstruction
                         case PacketOpcode.Evt_Physics__CreateObject_ID:
                             {
                                 uint ID = CreateObject(messageDataReader);
-                                if (initialItems.Count > 0)
-                                {
-                                    initialItems.Remove(ID);
-                                }
                                 break;
                             }
                         case PacketOpcode.INVENTORY_PUT_OBJ_IN_CONTAINER_EVENT:
@@ -130,71 +102,46 @@ namespace deathreconstruction
                             }
                     }
                 }
-                // print initial inventory
-                if (!initialItemsPrinted && initialItems.Count == 0)
-                {
-                    PrintInventory();
-                    initialItemsPrinted = true;
-                }
-                if (i == deathIndex)
-                {
-                    AlwaysDrop();
-                    List<uint> droppedItems = GetDroppedItems(deathIndex);
-                    foreach (uint ID in droppedItems)
-                    {
-                        if (inventory.ContainsKey(ID))
-                        {
-                            Console.Write("I ");
-                            inventory[ID].Print();
-                        }
-                        else if (wielded.ContainsKey(ID))
-                        {
-                            Console.Write("W ");
-                            wielded[ID].Print();
-                        }
-                        else
-                        {
-                            Debug.Assert(false);
-                        }
-                    }
-                    Console.WriteLine(droppedItems.Count);
-                    // needs:
-                    // inventory snapshot
-                    // dropped items
-                    // dropped item string
-                    //HypothesisTester tester = new HypothesisTester(characterLevel, inventory, packs, wielded);
-                    //tester.Test();
-                    break;
-                }
-            }
-        }
 
-        public void PrintInventory()
-        {
-            Console.WriteLine("Main Pack");
-            foreach (Item item in inventory.Values)
-            {
-                if (item.containerID == characterID)
+                if (i == deathRecords[deathIndex])
                 {
-                    item.Print();
+                    // find dropped items
+                    (droppedItems, deathText, lastDeathRecord) = GetDroppedInformation(deathRecords[deathIndex]);
                 }
-            }
-            foreach (Item pack in packs.Values)
-            {
-                Console.WriteLine("Pack " + pack.name);
-                foreach (Item item in inventory.Values)
+
+                if (i == lastDeathRecord)
                 {
-                    if (item.containerID == pack.ID)
+                    // add death record
+                    foundDeaths.Add(new Tuple<Character, List<uint>, string>(new Character(character), droppedItems, deathText));
+
+                    deathIndex++;
+                    if (deathIndex >= deathRecords.Count)
                     {
-                        item.Print();
+                        // finished all deaths
+                        break;
+                    }
+
+                    // search up from next death
+                    for (int j = deathRecords[deathIndex]; j > i; j--)
+                    {
+                        using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
+                        {
+                            PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref character.ID);
+                            if (opcode == PacketOpcode.PLAYER_DESCRIPTION_EVENT)
+                            {
+                                // restart from new login event
+                                character = new Character();
+                                otherObjects = new Dictionary<uint, Item>();
+                                PlayerDescription(messageDataReader);
+                                i = j;
+                                break;
+                            }
+                        }
                     }
                 }
+                // continue from current login event
             }
-            Console.WriteLine("Wielded");
-            foreach (Item item in wielded.Values)
-            {
-                item.Print();
-            }
+            return foundDeaths;
         }
 
         // find login descriptions followed by deaths of the logged in character
@@ -202,7 +149,7 @@ namespace deathreconstruction
         {
             uint characterID = uint.MaxValue;
             uint loginCharacterID = 0x0;
-            List<int> deathIndices = new List<int>();
+            List<int> deathRecords = new List<int>();
 
             for (int i = 0; i < records.Count; i++)
             {
@@ -222,7 +169,7 @@ namespace deathreconstruction
                                 // we have a player descrption event for this death
                                 if (characterID == loginCharacterID)
                                 {
-                                    deathIndices.Add(i);
+                                    deathRecords.Add(i);
                                 }
                                 break;
                             }
@@ -230,35 +177,45 @@ namespace deathreconstruction
                 }
             }
 
-            return deathIndices;
+            return deathRecords;
         }
 
-        private List<uint> GetDroppedItems(int deathIndex)
+        private Tuple<List<uint>, string, int> GetDroppedInformation(int deathRecord)
         {
-            uint affectedCharacterID = characterID;
-            uint corpseID = 0x0;
+            uint affectedCharacterID = character.ID;
             List<uint> droppedItems = new List<uint>();
+            string deathText = null;
+            int lastDeathRecord = deathRecord;
 
             int i;
-            // find the corpse
-            for (i = deathIndex + 1; i < records.Count; i++)
+            // find the death text, assumes printed after all items are moved
+            // need to update for augments and no items dropped
+            for (i = deathRecord + 1; i < records.Count; i++)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
                 {
                     PacketOpcode opcode = Util.readUnorderedOpcode(messageDataReader);
-                    if (opcode == PacketOpcode.Evt_Physics__CreateObject_ID)
+                    if (opcode == PacketOpcode.Evt_Communication__TextboxString_ID)
                     {
-                        CM_Physics.CreateObject message = CM_Physics.CreateObject.read(messageDataReader);
+                        CM_Communication.TextBoxString message = CM_Communication.TextBoxString.read(messageDataReader);
 
-                        if (message.wdesc._name.ToString().Equals("Corpse of " + characterName))
+                        if (message.ChatMessageType == 0x0)
                         {
-                            corpseID = message.object_id;
-                            break;
+                            deathText = message.MessageText.ToString();
+
+                            if (deathText.StartsWith("You've lost"))
+                            {
+                                break;
+                            }
                         }
                     }
                 }
             }
-            for (--i; i > deathIndex; i--)
+            if (deathText == null)
+            {
+                return new Tuple<List<uint>, string, int>(droppedItems, "", 0);
+            }
+            for (--i; i > deathRecord; i--)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
                 {
@@ -268,121 +225,97 @@ namespace deathreconstruction
                     {
                         CM_Inventory.PutObjectInContainerEvent message = CM_Inventory.PutObjectInContainerEvent.read(messageDataReader);
 
-                        if (message.i_container == corpseID)
+                        Debug.Assert(affectedCharacterID == character.ID);
+                        // we can pickup items after we die
+                        if (lastDeathRecord == deathRecord && message.i_container == character.ID)
                         {
-                            Debug.Assert(affectedCharacterID == characterID);
-                            droppedItems.Add(message.i_objectId);
+                            lastDeathRecord = i;
                         }
+                        droppedItems.Add(message.i_objectId);
                     }
                 }
             }
 
-            return droppedItems;
+            return new Tuple<List<uint>, string, int>(droppedItems, deathText, lastDeathRecord);
         }
+
+        private void PlayerDescription(BinaryReader messageDataReader)
+        {
+            CM_Login.PlayerDescription message = CM_Login.PlayerDescription.read(messageDataReader);
+            Console.WriteLine(message.ilist.Length);
+            // level
+            character.Name = message.CACQualities.CBaseQualities._strStatsTable.hashTable[STypeString.NAME_STRING].ToString();
+            character.Level = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.LEVEL_INT];
+            // pack items
+            foreach (CM_Inventory.ContentProfile item in message.clist.list)
+            {
+                character.AddItem(item);
+            }
+            // wielded items
+            foreach (CM_Login.InventoryPlacement item in message.ilist.list)
+            {
+                character.AddWieldedItem(item);
+            }
+        }
+
 
         private uint CreateObject(BinaryReader messageDataReader)
         {
             CM_Physics.CreateObject message = CM_Physics.CreateObject.read(messageDataReader);
 
-            uint ID = message.object_id;
+            uint id = message.object_id;
+            Item item = new Item(id, message.wdesc);
 
-            Item item = new Item(ID, message.wdesc._name.ToString(), message.wdesc._value, message.wdesc._stackSize, message.wdesc._containerID, message.wdesc._type, message.wdesc._wcid);
-
-            if (inventory.ContainsKey(ID))
+            if (!character.UpdateItem(item))
             {
-                Console.WriteLine("Inventory " + message.wdesc._name.ToString());
-                inventory[ID] = item;
-            }
-            else if (wielded.ContainsKey(ID))
-            {
-                Debug.Assert(message.wdesc._wielderID == characterID);
-                Console.WriteLine("Wielded " + message.wdesc._name.ToString());
-                wielded[ID] = item;
-            }
-            else if (packs.ContainsKey(ID))
-            {
-                packs[ID] = item;
-            }
-            else
-            {
-                if (otherObjects.ContainsKey(ID))
+                if (otherObjects.ContainsKey(id))
                 {
-                    otherObjects[ID] = item;
-                    // shouldn't create an object again before destroying it?
-                    //Console.WriteLine("Encountered " + message.wdesc._name.ToString() + " -- Duplicate!");
+                    otherObjects[id] = item;
                 }
                 else
                 {
-                    otherObjects.Add(message.object_id, item);
+                    otherObjects.Add(id, item);
                 }
             }
-            return message.object_id;
+            return id;
         }
 
         private void PutObjectInContainer(BinaryReader messageDataReader)
         {
             CM_Inventory.PutObjectInContainerEvent message = CM_Inventory.PutObjectInContainerEvent.read(messageDataReader);
 
-            uint ID = message.i_objectId;
+            uint id = message.i_objectId;
             uint containerID = message.i_container;
 
-            if (inventory.ContainsKey(ID))
+            Item item = character.MoveItem(id, containerID);
+
+            if (item != null)
             {
-                if (containerID == characterID || packs.ContainsKey(containerID))
-                {
-                    // moved item into a container within inventory
-                    inventory[ID].containerID = containerID;
-                }
-                else
-                {
-                    // removed item from inventory
-                    otherObjects.Add(ID, inventory[ID]);
-                    inventory.Remove(ID);
-                    otherObjects[ID].containerID = containerID;
-                }
+                // removed from character
+                otherObjects.Add(id, item);
             }
-            else if (wielded.ContainsKey(ID))
-            {
-                // unequip item into particular pack?
-                if (containerID == characterID || packs.ContainsKey(containerID))
-                {
-                    inventory.Add(ID, wielded[ID]);
-                    inventory[ID].containerID = containerID;
-                    wielded.Remove(ID);
-                }
-                else
-                {
-                    // removed item from inventory
-                    otherObjects.Add(ID, wielded[ID]);
-                    wielded.Remove(ID);
-                    otherObjects[ID].containerID = containerID;
-                }
-            }
-            else if (packs.ContainsKey(ID))
-            {
-                // moving an entire pack
-                Debug.Assert(false);
-            }
-            else if (otherObjects.ContainsKey(ID))
+            else if (otherObjects.ContainsKey(id))
             {
                 // put item into our inventory
-                inventory.Add(ID, otherObjects[ID]);
-                otherObjects.Remove(ID);
-                inventory[ID].containerID = containerID;
-                Console.WriteLine("Picked up " + inventory[ID].name);
+                item = otherObjects[id];
+                item.ContainerID = containerID;
+                character.AddItem(item);
+                otherObjects.Remove(id);
+                Console.WriteLine("Picked up " + item.Name);
             }
             else
             {
-                // handle unknown item
-                if (containerID == characterID || packs.ContainsKey(containerID))
-                {
-                    inventory.Add(ID, new Item(ID));
-                    inventory[ID].containerID = containerID;
-                }
-                else
-                {
-                    Debug.Assert(false);
-                }
+                Debug.Assert(item == null);
+                //// handle unknown item
+                //if (containerID == character.ID || packs.ContainsKey(containerID))
+                //{
+                //    inventory.Add(ID, new Item(ID));
+                //    inventory[ID].containerID = containerID;
+                //}
+                //else
+                //{
+                //    Debug.Assert(false);
+                //}
             }
         }
 
@@ -390,41 +323,16 @@ namespace deathreconstruction
         {
             CM_Inventory.WieldItem message = CM_Inventory.WieldItem.read(messageDataReader);
 
-            uint ID = message.i_item;
-            Debug.Assert(inventory.ContainsKey(ID));
-            wielded.Add(ID, inventory[ID]);
-            inventory.Remove(ID);
-            wielded[ID].containerID = characterID;
+            character.WieldItem(message.i_item);
         }
 
         private void RemoveObject(BinaryReader messageDataReader)
         {
             CM_Inventory.RemoveObject message = CM_Inventory.RemoveObject.read(messageDataReader);
 
-            uint ID = message.i_item;
-
-            if (inventory.Remove(ID))
+            if (character.RemoveItem(message.i_item) == null)
             {
-                return;
-            }
-            else if (packs.Remove(ID))
-            {
-                Debug.Assert(false);
-                foreach (Item item in inventory.Values)
-                {
-                    if (item.containerID == ID)
-                    {
-                        inventory.Remove(ID);
-                    }
-                }
-            }
-            else if (wielded.Remove(ID))
-            {
-                return;
-            }
-            else if (otherObjects.Remove(ID))
-            {
-                return;
+                otherObjects.Remove(message.i_item);
             }
         }
 
@@ -433,12 +341,11 @@ namespace deathreconstruction
             CM_Inventory.ViewContents message = CM_Inventory.ViewContents.read(messageDataReader);
 
             uint containerID = message.i_container;
-            if (packs.ContainsKey(containerID))
+            if (character.FindItem(containerID) != null)
             {
                 foreach (var item in message.contents_list.list)
                 {
-                    inventory.Add(item.m_iid, new Item(item.m_iid));
-                    inventory[item.m_iid].containerID = containerID;
+                    character.AddItemToContainer(item, containerID);
                 }
             }
         }
@@ -447,23 +354,16 @@ namespace deathreconstruction
         {
             CM_Inventory.UpdateStackSize message = CM_Inventory.UpdateStackSize.read(messageDataReader);
 
-            uint ID = message.item;
+            uint id = message.item;
 
-            if (inventory.ContainsKey(ID))
+            if (!character.UpdateStackSize(id, message.amount, message.newValue))
             {
-                inventory[ID].stackSize = message.amount;
-                inventory[ID].value = message.newValue;
-            }
-            else if (otherObjects.ContainsKey(ID))
-            {
-                otherObjects[ID].stackSize = message.amount;
-                otherObjects[ID].value = message.newValue;
-            }
-            else
-            {
-                otherObjects.Add(ID, new Item(ID));
-                otherObjects[ID].stackSize = message.amount;
-                otherObjects[ID].value = message.newValue;
+                if (!otherObjects.ContainsKey(id))
+                {
+                    otherObjects.Add(id, new Item(id));
+                }
+                otherObjects[id].StackSize = message.amount;
+                otherObjects[id].Value = message.newValue;
             }
         }
 
@@ -471,136 +371,18 @@ namespace deathreconstruction
         {
             CM_Inventory.InventoryPutObjIn3D message = CM_Inventory.InventoryPutObjIn3D.read(messageDataReader);
 
-            uint ID = message.ObjectID;
+            uint id = message.ObjectID;
 
-            if (inventory.ContainsKey(ID))
+            Item item = character.RemoveItem(id);
+            if (item != null)
             {
-                otherObjects.Add(ID, inventory[ID]);
-                inventory.Remove(ID);
-            }
-            else if (packs.ContainsKey(ID))
-            {
-                Debug.Assert(false);
-                otherObjects.Add(ID, packs[ID]);
-                packs.Remove(ID);
-            }
-            else if (wielded.ContainsKey(ID))
-            {
-                otherObjects.Add(ID, wielded[ID]);
-                wielded.Remove(ID);
+                otherObjects.Add(id, item);
             }
             else
             {
+                // didn't find in our inventory
                 Debug.Assert(false);
             }
-
-        }
-
-        private void AlwaysDrop()
-        {
-            Stopwatch stopWatch = new Stopwatch();
-            stopWatch.Start();
-
-            string createdPath = "..\\Debug\\Data\\weenies\\";
-            string cachedPath = "..\\Debug\\Data\\cached\\";
-            IEnumerable<string> createdWeenies = Directory
-                .EnumerateFiles(createdPath, "*.json", SearchOption.TopDirectoryOnly)
-                .Select(Path.GetFileName);
-            IEnumerable<string> cachedWeenies = Directory
-                .EnumerateFiles(cachedPath, "*.json", SearchOption.TopDirectoryOnly)
-                .Select(Path.GetFileName);
-
-            // TODO: investigate named tuples
-
-            // find all created weenies that match to inventory wcids, otherwise null
-            IEnumerable<Tuple<Item, string>> createdWeenieMatches =
-                from item in inventory.Values // TODO: need to fix, add wielded
-                join createdWeenie in createdWeenies
-                on item.wcid.ToString() + " " equals createdWeenie.Substring(0, createdWeenie.IndexOf(" ") + 1)
-                into fileNames
-                from fileName in fileNames.DefaultIfEmpty()
-                select new Tuple<Item, string>(item, fileName == null ? null : createdPath + fileName);
-
-            // find all cached weenies for inventory wcids that do not have created weenies
-            IEnumerable<Tuple<Item, string>> cachedWeenieMatches =
-                from fileMatch in createdWeenieMatches
-                where fileMatch.Item2 == null
-                join cachedWeenie in cachedWeenies
-                on fileMatch.Item1.wcid.ToString("00000") equals cachedWeenie.Substring(0, 5)
-                select new Tuple<Item, string>(fileMatch.Item1, cachedPath + cachedWeenie);
-
-            // combine results
-            IEnumerable<Tuple<Item, string>> fileNamePairs =
-                from createdWeeniePair in createdWeenieMatches
-                join cachedWeeniePair in cachedWeenieMatches
-                on createdWeeniePair.Item1 equals cachedWeeniePair.Item1
-                into createdWeenieNulls
-                from createdWeenieNull in createdWeenieNulls.DefaultIfEmpty()
-                select new Tuple<Item, string>(createdWeeniePair.Item1, createdWeeniePair.Item2 != null ? createdWeeniePair.Item2 : createdWeenieNull.Item2);
-
-            foreach (Tuple<Item, string> fileNamePair in fileNamePairs)
-            {
-                fileNamePair.Item1.BondedStatus = GetBondedStatusFromJson(fileNamePair.Item2);
-                if (fileNamePair.Item1.BondedStatus != BondedStatusEnum.Normal_BondedStatus)
-                {
-                    Console.WriteLine(fileNamePair.Item1.name);
-                }
-            }
-            stopWatch.Stop();
-            TimeSpan ts = stopWatch.Elapsed;
-            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-                        ts.Hours, ts.Minutes, ts.Seconds,
-                        ts.Milliseconds / 10);
-            Console.WriteLine("RunTime " + elapsedTime);
-        }
-
-        // grabs BONDED_INT quick and dirty
-        private BondedStatusEnum GetBondedStatusFromJson(string filePath)
-        {
-            JsonTextReader reader = new JsonTextReader(new StreamReader(File.OpenRead(filePath)));
-            reader.Read(); // BeginObject
-            while (reader.Read())
-            {
-                if (reader.TokenType == JsonToken.PropertyName)
-                {
-                    if (reader.Value.Equals("intStats"))
-                    {
-                        reader.Read(); // Token : StartArray
-                        while (reader.Read() && reader.TokenType != JsonToken.EndArray) // Token: StartObject
-                        {
-                            reader.Read(); // "key"
-                            reader.Read(); // 33
-                            if ((long)reader.Value == 33)
-                            {
-                                reader.Read(); // "value"
-                                return (BondedStatusEnum)(reader.ReadAsInt32() ?? 0);
-                            }
-                            reader.Read(); // "value"
-                            reader.Read(); // different value
-                            reader.Read(); // Token: EndObject
-                        }
-                        break;
-                    }
-                    else if (reader.Value.Equals("IntValues"))
-                    {
-                        reader.Read(); // Token: StartObject
-                        while (reader.Read() && reader.TokenType != JsonToken.EndObject) // 
-                        {
-                            if (reader.TokenType == JsonToken.PropertyName && reader.Value.Equals("33"))
-                            {
-                                return (BondedStatusEnum)(reader.ReadAsInt32() ?? 0);
-                            }
-                            reader.Read(); // different property
-                        }
-                        break; // didn't find
-                    }
-                }
-                else
-                {
-                    reader.Skip();
-                }
-            }
-            return 0;
         }
     }
 }

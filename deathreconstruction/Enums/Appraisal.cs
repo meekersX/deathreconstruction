@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum ObjectSelectStatus {
+﻿public enum ObjectSelectStatus {
     Invalid_OSS,
     ObjectOnscreen_OSS,
     ObjectOffscreen_OSS,

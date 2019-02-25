@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum GenericQualitiesPackHeader {
+﻿public enum GenericQualitiesPackHeader {
     Packed_None = 0,
     Packed_IntStats = (1 << 0),
     Packed_BoolStats = (1 << 1),

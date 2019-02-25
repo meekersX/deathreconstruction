@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Diagnostics;
 
 namespace deathreconstruction
 {
@@ -29,7 +27,12 @@ namespace deathreconstruction
             Util.initReaders();
             string fileName = "..\\Debug\\Data\\pkt_2017-1-15_1484535255_log.pcap";
             InventoryReconstructor reconstructor = new InventoryReconstructor();
-            reconstructor.Reconstruct(fileName);
+            List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(fileName);
+            HypothesisTester tester = new HypothesisTester();
+            foreach (Tuple<Character, List<uint>, string> deathRecord in foundDeaths)
+            {
+                tester.Test(deathRecord.Item1, deathRecord.Item2, deathRecord.Item3);
+            }
         }
 
         //static void processDirectoryRecursively(string path)

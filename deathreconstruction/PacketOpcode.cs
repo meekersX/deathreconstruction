@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum PacketOpcode {
+﻿public enum PacketOpcode {
     Evt_Admin__CreateRare_ID = 1,
     NSP_NOTIFY_EVENT = 2,
     Evt_Allegiance__AllegianceUpdateAborted_ID = 3,

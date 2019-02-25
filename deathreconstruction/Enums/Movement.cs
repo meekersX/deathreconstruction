@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-// TODO: Figure out what bitfield(s) these values map to and replace with OR's
+﻿// TODO: Figure out what bitfield(s) these values map to and replace with OR's
 // Note: These IDs are from the last version of the client. Earlier versions of the client had different values for some of the enums.
 public enum MotionCommand : uint {
     Command_Invalid                               = 0,

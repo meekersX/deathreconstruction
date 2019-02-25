@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum MaterialType {
+﻿public enum MaterialType {
     Undef_MaterialType,
     Ceramic_MaterialType,
     Porcelain_MaterialType,

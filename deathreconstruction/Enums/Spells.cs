@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-public enum EnchantmentVersion {
+﻿public enum EnchantmentVersion {
     Undef_EnchantmentVersion,
     SpellSetID_EnchantmentVersion,
     Newest_EnchantmentVersion = SpellSetID_EnchantmentVersion
