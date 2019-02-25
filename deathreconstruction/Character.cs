@@ -120,6 +120,15 @@ namespace deathreconstruction
             return null;
         }
 
+        public bool Contains(uint containerID)
+        {
+            if (containerID == ID || packs.ContainsKey(containerID))
+            {
+                return true;
+            }
+            return false;
+        }
+
         public Item RemoveItem(uint itemID)
         {
             Item item = FindItem(itemID);
@@ -152,32 +161,33 @@ namespace deathreconstruction
             addedItem.ContainerID = containerID;
         }
 
-        public Item MoveItem(uint itemID, uint containerID)
+        public void AddItemToContainer(Item item, uint containerID)
         {
-            Item item;
-            if (inventory.ContainsKey(itemID))
+            AddItem(item);
+            item.ContainerID = containerID;
+        }
+
+        public bool MoveItem(uint itemID, uint containerID, out Item item)
+        {
+            if (inventory.TryGetValue(itemID, out item))
             {
-                item = inventory[itemID];
+                // new container
                 item.ContainerID = containerID;
                 // unwield
                 item.WielderID = 0x0;
                 if (containerID == ID || packs.ContainsKey(containerID))
                 {
-                    // moved item into a container within inventory
+                    // still within inventory, done
+                    item = null;
                 }
                 else
                 {
-                    // removed item from inventory
+                    // removed from inventory
                     inventory.Remove(itemID);
-                    return item;
                 }
+                return true;
             }
-            else if (packs.ContainsKey(ID))
-            {
-                // moving an entire pack
-                Debug.Assert(false);
-            }
-            return null;
+            return false;
         }
 
         public List<Item> GetInventory()

@@ -4,28 +4,15 @@ namespace deathreconstruction
 {
     class Item
     {
-        public uint ID;
-        public string Name;
-        public uint Value;
-        public uint StackSize;
-        public uint ContainerID;
-        public BondedStatusEnum BondedStatus;
-        public uint Wcid;
-        public ITEM_TYPE Type;
-        public uint WielderID;
-
-        public Item()
-        {
-            ID = 0x0;
-            Name = "";
-            Value = 0;
-            StackSize = 0;
-            ContainerID = 0x0;
-            Type = ITEM_TYPE.TYPE_UNDEF;
-            BondedStatus = BondedStatusEnum.Normal_BondedStatus;
-            Wcid = 0x0;
-            WielderID = 0x0;
-        }
+        public uint ID = 0x0;
+        public string Name = "";
+        public uint Value = 0;
+        public uint StackSize = 0;
+        public uint ContainerID = 0x0;
+        public BondedStatusEnum BondedStatus = BondedStatusEnum.Normal_BondedStatus;
+        public uint Wcid = 0x0;
+        public ITEM_TYPE Type = ITEM_TYPE.TYPE_UNDEF;
+        public uint WielderID = 0x0;
 
         public Item(uint createdID, uint wielderID = 0x0)
         {

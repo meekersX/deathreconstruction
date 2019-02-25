@@ -287,35 +287,41 @@ namespace deathreconstruction
             uint id = message.i_objectId;
             uint containerID = message.i_container;
 
-            Item item = character.MoveItem(id, containerID);
-
-            if (item != null)
+            Item item;
+            if (character.MoveItem(id, containerID, out item))
             {
-                // removed from character
-                otherObjects.Add(id, item);
+                // existing item needs to be moved into world
+                if (item != null)
+                {
+                    otherObjects.Add(item.ID, item);
+                }
             }
-            else if (otherObjects.ContainsKey(id))
+            else if (otherObjects.TryGetValue(id, out item))
             {
-                // put item into our inventory
-                item = otherObjects[id];
-                item.ContainerID = containerID;
-                character.AddItem(item);
-                otherObjects.Remove(id);
-                Console.WriteLine("Picked up " + item.Name);
+                if (character.Contains(containerID))
+                {
+                    // moving item in world into inventory
+                    character.AddItemToContainer(item, containerID);
+                }
+                else
+                {
+                    // moving item within world
+                    item.ContainerID = containerID;
+                }
             }
-            else
+            else // non-existent items
             {
-                Debug.Assert(item == null);
-                //// handle unknown item
-                //if (containerID == character.ID || packs.ContainsKey(containerID))
-                //{
-                //    inventory.Add(ID, new Item(ID));
-                //    inventory[ID].containerID = containerID;
-                //}
-                //else
-                //{
-                //    Debug.Assert(false);
-                //}
+                item = new Item(id);
+                if (character.Contains(containerID))
+                {
+                    // move non-existent item into inventory
+                    character.AddItemToContainer(item, containerID);
+                }
+                else
+                {
+                    // move non-existent item into world
+                    otherObjects.Add(item.ID, item);
+                }
             }
         }
 

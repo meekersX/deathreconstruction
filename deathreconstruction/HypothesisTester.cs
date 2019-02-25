@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using Newtonsoft.Json;
 
@@ -20,6 +21,7 @@ namespace deathreconstruction
         // pyreal rounding
         // wielded items
         // stack?
+        // need PK status
 
         public void Test(Character testCharacter, List<uint> testDroppedItems, string testDeathText)
         {
@@ -34,13 +36,6 @@ namespace deathreconstruction
                 character.PrintItem(itemID);
             }
             Console.WriteLine(droppedItems.Count);
-            // needs:
-            // inventory snapshot
-            // dropped items
-            // dropped item string
-            //HypothesisTester tester = new HypothesisTester(characterLevel, inventory, packs, wielded);
-            //tester.Test();
-            //            PrintInventoryByValue();
             ByClass();
         }
 
@@ -53,7 +48,7 @@ namespace deathreconstruction
             Console.WriteLine("Total Pyreals: " + TotalPyreals());
             foreach (var item in inventory)
             {
-                if (includeWielded || item.WielderID == character.ID)
+                if (includeWielded || item.WielderID != character.ID)
                 {
                     if (item.BondedStatus == BondedStatusEnum.Normal_BondedStatus)
                     {
@@ -83,35 +78,90 @@ namespace deathreconstruction
             return totalPyreals;
         }
 
-        private void CurrentGDLE()
+        private bool ByClass()
         {
+            //List<Tuple<uint, Item>> classified = new List<Tuple<uint, Item>>(valueMapping.Count());
 
-        }
+            //foreach (var item in valueMapping)
+            //{
+            //    if (seenTypes.Contains(item.Item2.Type))
+            //    {
+            //        classified.Add(new Tuple<uint, Item>(item.Item1 / 2, item.Item2));
+            //    }
+            //    else
+            //    {
+            //        classified.Add(new Tuple<uint, Item>(item.Item1, item.Item2));
+            //    }
+            //    seenTypes.Add(item.Item2.Type);
+            //}
 
-        private void ByClass()
-        {
+            //int i = 1;
+            //foreach (var item in classified.OrderByDescending(x => x.Item1).Take(20))
+            //{
+            //    Console.WriteLine(i++ + ".\t" + item.Item1 + "\t" + item.Item2.Name + " " + item.Item2.Type);
+            //}
+
+            string pattern = @"^You've lost ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?(?: your ([^,]+),)*(?: and your ([^,]+))!$";
+            Match match = Regex.Match(deathText, pattern);
+
+            List<string> parsedItems = new List<string>(droppedItems.Count + 1);
+            for (int i = 1; i < match.Groups.Count; i++)
+            {
+                foreach (Capture capture in match.Groups[i].Captures)
+                {
+                    Console.WriteLine(capture.Value);
+                    parsedItems.Add(capture.Value);
+                }
+            }
+
+            uint droppedPyreals = 0;
+
+            if (character.Level > 5)
+            {
+                droppedPyreals = (TotalPyreals() + 1) / 2;
+            }
+
+            // verify pyreal count
+            if (!droppedPyreals.ToString("N0").Equals(parsedItems[0]))
+            {
+                Console.WriteLine("Pyreals! Predicted: " + droppedPyreals.ToString("N0") + " Actual: " + parsedItems[0]);
+                return false;
+            }
+
+            int droppedItemsMin = 0;
+            int droppedItemsMax = 0;
+            bool wielded = false;
+            if (character.Level > 10)
+            {
+                droppedItemsMin = 1;
+                droppedItemsMax = 1;
+            }
+            else if (character.Level > 20)
+            {
+                droppedItemsMin = character.Level / 20;
+                droppedItemsMax = droppedItemsMin + 2;
+            }
+
+            if (character.Level > 35)
+            {
+                wielded = true;
+            }
+
+            // ensure no wielded items if specified
+
             HashSet<ITEM_TYPE> seenTypes = new HashSet<ITEM_TYPE>();
-            IEnumerable<Tuple<uint, Item>> valueMapping = SortedValue();
-            List<Tuple<uint, Item>> classified = new List<Tuple<uint, Item>>(valueMapping.Count());
 
-            foreach (var item in valueMapping)
-            {
-                if (seenTypes.Contains(item.Item2.Type))
-                {
-                    classified.Add(new Tuple<uint, Item>(item.Item1 / 2, item.Item2));
-                }
-                else
-                {
-                    classified.Add(new Tuple<uint, Item>(item.Item1, item.Item2));
-                }
-                seenTypes.Add(item.Item2.Type);
-            }
+            // get inventory sorted by value
+            IEnumerable<Tuple<uint, Item>> valueMapping = SortedValue(wielded);
 
-            int i = 1;
-            foreach (var item in classified.OrderByDescending(x => x.Item1).Take(20))
-            {
-                Console.WriteLine(i++ + ".\t" + item.Item1 + "\t" + item.Item2.Name + " " + item.Item2.Type);
-            }
+            // prediction: moved items into corpse in descending order of value, also printed in text string in same order
+
+            //for (uint currentItem in droppedItems)
+            //{
+
+            //}
+
+            return true;
         }
 
         private void AlwaysDrop()
