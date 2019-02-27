@@ -69,6 +69,7 @@
     <Compile Include="Enums\Inventory.cs" />
     <Compile Include="Enums\Item.cs" />
     <Compile Include="Enums\MaterialType.cs" />
+    <Compile Include="Message Processors\CM_Qualities.cs" />
     <Compile Include="Message Processors\Proto_UI.cs" />
     <Compile Include="PacketHeaders.cs" />
     <Compile Include="PacketOpcode.cs" />

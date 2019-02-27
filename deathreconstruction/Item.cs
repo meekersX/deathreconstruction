@@ -46,10 +46,5 @@ namespace deathreconstruction
         {
             Console.WriteLine(ID.ToString("X") + " " + Name + " (" + StackSize + "): " + Value + " " + Wcid);
         }
-
-        public void Print2()
-        {
-            Console.WriteLine(Name + " " + Value / StackSize + " " + Type);
-        }
     }
 }

@@ -26,7 +26,7 @@ namespace deathreconstruction
 
             LoadFile(fileName);
 
-            List<int> deathRecords = FindDeaths();
+            List<Tuple<int, int>> deathRecords = FindDeaths();
             if (deathRecords.Count == 0)
             {
                 // no valid deaths found
@@ -40,27 +40,22 @@ namespace deathreconstruction
             character = new Character();
             otherObjects = new Dictionary<uint, Item>();
 
-            int i;
-            for (i = deathRecords[deathIndex] - 1; i >= 0; i--)
-            {
-                using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
-                {
-                    PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref character.ID);
-                    if (opcode == PacketOpcode.PLAYER_DESCRIPTION_EVENT)
-                    {
-                        PlayerDescription(messageDataReader);
-                        break;
-                    }
-                }
-            }
-
-            for (i = i + 1; i < records.Count; i++)
+            for (int i = deathRecords[0].Item1; i < records.Count; i++)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
                 {
                     PacketOpcode opcode = Util.readOpcode(messageDataReader);
                     switch (opcode)
                     {
+                        case PacketOpcode.PLAYER_DESCRIPTION_EVENT:
+                            {
+                                using (BinaryReader comessageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
+                                {
+                                    Util.readOrderedOpcode(comessageDataReader, ref character.ID);
+                                }
+                                PlayerDescription(messageDataReader);
+                                break;
+                            }
                         case PacketOpcode.Evt_Physics__CreateObject_ID:
                             {
                                 uint ID = CreateObject(messageDataReader);
@@ -96,6 +91,11 @@ namespace deathreconstruction
                                 PutObjectIn3D(messageDataReader);
                                 break;
                             }
+                        case PacketOpcode.Evt_Qualities__PrivateUpdateInt_ID:
+                            {
+                                UpdatePrivateInt(messageDataReader, opcode);
+                                break;
+                            }
                         default:
                             {
                                 break;
@@ -103,10 +103,10 @@ namespace deathreconstruction
                     }
                 }
 
-                if (i == deathRecords[deathIndex])
+                if (i == deathRecords[deathIndex].Item2)
                 {
                     // find dropped items
-                    (droppedItems, deathText, lastDeathRecord) = GetDroppedInformation(deathRecords[deathIndex]);
+                    (droppedItems, deathText, lastDeathRecord) = GetDroppedInformation(i);
                 }
 
                 if (i == lastDeathRecord)
@@ -121,35 +121,25 @@ namespace deathreconstruction
                         break;
                     }
 
-                    // search up from next death
-                    for (int j = deathRecords[deathIndex]; j > i; j--)
+                    if (deathRecords[deathIndex - 1].Item1 != deathRecords[deathIndex].Item1) // different login events
                     {
-                        using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
-                        {
-                            PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref character.ID);
-                            if (opcode == PacketOpcode.PLAYER_DESCRIPTION_EVENT)
-                            {
-                                // restart from new login event
-                                character = new Character();
-                                otherObjects = new Dictionary<uint, Item>();
-                                PlayerDescription(messageDataReader);
-                                i = j;
-                                break;
-                            }
-                        }
+                        // skip forward
+                        character = new Character();
+                        otherObjects = new Dictionary<uint, Item>();
+                        i = deathRecords[deathIndex].Item1;
                     }
                 }
-                // continue from current login event
             }
             return foundDeaths;
         }
 
         // find login descriptions followed by deaths of the logged in character
-        private List<int> FindDeaths()
+        private List<Tuple<int, int>> FindDeaths()
         {
             uint characterID = uint.MaxValue;
             uint loginCharacterID = 0x0;
-            List<int> deathRecords = new List<int>();
+            List<Tuple<int, int>> deathRecords = new List<Tuple<int, int>>();
+            int startRecord = -1;
 
             for (int i = 0; i < records.Count; i++)
             {
@@ -158,10 +148,21 @@ namespace deathreconstruction
                     PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref characterID);
                     switch (opcode)
                     {
+                        case PacketOpcode.CHARACTER_ENTER_GAME_EVENT:
+                            {
+                                Proto_UI.EnterWorld message = Proto_UI.EnterWorld.read(messageDataReader);
+                                startRecord = i;
+                                break;
+                            }
                         case PacketOpcode.PLAYER_DESCRIPTION_EVENT:
                             {
+                                CM_Login.PlayerDescription message = CM_Login.PlayerDescription.read(messageDataReader);
+                                if ((uint)message.CACQualities._weenie_type == 43480 || (uint)message.CACQualities._weenie_type == 43481)
+                                {
+                                    // exclude Olthoi play
+                                    continue;
+                                }
                                 loginCharacterID = characterID;
-                                Console.WriteLine(loginCharacterID);
                                 break;
                             }
                         case PacketOpcode.VICTIM_NOTIFICATION_EVENT:
@@ -169,7 +170,7 @@ namespace deathreconstruction
                                 // we have a player descrption event for this death
                                 if (characterID == loginCharacterID)
                                 {
-                                    deathRecords.Add(i);
+                                    deathRecords.Add(new Tuple<int, int>(startRecord, i));
                                 }
                                 break;
                             }
@@ -213,6 +214,7 @@ namespace deathreconstruction
             }
             if (deathText == null)
             {
+                // couldn't find death text
                 return new Tuple<List<uint>, string, int>(droppedItems, "", 0);
             }
             for (--i; i > deathRecord; i--)
@@ -226,12 +228,18 @@ namespace deathreconstruction
                         CM_Inventory.PutObjectInContainerEvent message = CM_Inventory.PutObjectInContainerEvent.read(messageDataReader);
 
                         Debug.Assert(affectedCharacterID == character.ID);
-                        // we can pickup items after we die
-                        if (lastDeathRecord == deathRecord && message.i_container == character.ID)
+                        if (character.Contains(message.i_container))
                         {
-                            lastDeathRecord = i;
+                            // we can pickup items after we die
+                            if (lastDeathRecord == deathRecord)
+                            {
+                                lastDeathRecord = i;
+                            }
                         }
-                        droppedItems.Add(message.i_objectId);
+                        else
+                        {
+                            droppedItems.Add(message.i_objectId);
+                        }
                     }
                 }
             }
@@ -242,7 +250,6 @@ namespace deathreconstruction
         private void PlayerDescription(BinaryReader messageDataReader)
         {
             CM_Login.PlayerDescription message = CM_Login.PlayerDescription.read(messageDataReader);
-            Console.WriteLine(message.ilist.Length);
             // level
             character.Name = message.CACQualities.CBaseQualities._strStatsTable.hashTable[STypeString.NAME_STRING].ToString();
             character.Level = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.LEVEL_INT];
@@ -250,6 +257,27 @@ namespace deathreconstruction
             foreach (CM_Inventory.ContentProfile item in message.clist.list)
             {
                 character.AddItem(item);
+
+                Item addedItem;
+                uint id = item.m_iid;
+                if (otherObjects.TryGetValue(id, out addedItem))
+                {
+                    // moving pack in world into inventory
+                    character.UpdateItem(addedItem);
+                    if (item.m_uContainerProperties == (uint)ContainerProperties.Container)
+                    {
+                        // look for items in the world in this container to add
+                        foreach (Item otherItem in new List<Item>(otherObjects.Values))
+                        {
+                            if (otherItem.ContainerID == id)
+                            {
+                                character.AddItem(otherItem);
+                                otherObjects.Remove(otherItem.ID);
+                            }
+                        }
+                    }
+                    otherObjects.Remove(id);
+                }
             }
             // wielded items
             foreach (CM_Login.InventoryPlacement item in message.ilist.list)
@@ -302,6 +330,7 @@ namespace deathreconstruction
                 {
                     // moving item in world into inventory
                     character.AddItemToContainer(item, containerID);
+                    otherObjects.Remove(id);
                 }
                 else
                 {
@@ -354,6 +383,23 @@ namespace deathreconstruction
                     character.AddItemToContainer(item, containerID);
                 }
             }
+            else
+            {
+                Item containerItem;
+                if (otherObjects.TryGetValue(containerID, out containerItem))
+                {
+                }
+                else
+                {
+                    otherObjects.Add(containerID, new Item(containerID));
+                    foreach (var item in message.contents_list.list)
+                    {
+                        Item addedItem = new Item(item.m_iid);
+                        addedItem.ContainerID = containerID;
+                        otherObjects.Add(item.m_iid, addedItem);
+                    }
+                }
+            }
         }
 
         private void UpdateStackSize(BinaryReader messageDataReader)
@@ -388,6 +434,16 @@ namespace deathreconstruction
             {
                 // didn't find in our inventory
                 Debug.Assert(false);
+            }
+        }
+
+        private void UpdatePrivateInt(BinaryReader messageDataReader, PacketOpcode opcode)
+        {
+            CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int> message = CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int>.read(opcode, messageDataReader);
+
+            if (message.stype == STypeInt.LEVEL_INT)
+            {
+                character.Level = message.val;
             }
         }
     }

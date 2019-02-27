@@ -82,7 +82,7 @@ namespace deathreconstruction
             unloadedItems.Remove(item.ID);
             if (!initialItemsPrinted && unloadedItems.Count == 0)
             {
-                PrintInventory();
+                //PrintInventory();
                 initialItemsPrinted = true;
             }
             return true;
@@ -200,6 +200,7 @@ namespace deathreconstruction
             Console.WriteLine("Main Pack");
             foreach (Item item in inventory.Values)
             {
+                Debug.Assert(item.WielderID == ID || item.WielderID == 0x0);
                 if (item.ContainerID == ID && item.WielderID != ID)
                 {
                     item.Print();
