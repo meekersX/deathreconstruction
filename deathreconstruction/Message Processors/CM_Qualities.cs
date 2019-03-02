@@ -322,42 +322,28 @@ public class CM_Qualities {
         }
     }
 
-    //public class UpdateQualityEvent<TSType, T> : Message {
-    //    public PacketOpcode opcode;
-    //    public byte wts;
-    //    public uint sender;
-    //    public TSType stype;
-    //    public T val;
-    //    public int valLength;
+    public class UpdateQualityEvent<TSType, T>
+    {
+        public PacketOpcode opcode;
+        public byte wts;
+        public uint sender;
+        public TSType stype;
+        public T val;
+        public int valLength;
 
-    //    public static UpdateQualityEvent<TSType, T> read(PacketOpcode opcode, BinaryReader binaryReader) {
-    //        var newObj = new UpdateQualityEvent<TSType, T>();
-    //        newObj.opcode = opcode;
-    //        newObj.wts = binaryReader.ReadByte();
-    //        newObj.sender = binaryReader.ReadUInt32();
-    //        newObj.stype = (TSType)Enum.ToObject(typeof(TSType), binaryReader.ReadUInt32());
-    //        var valStartPosition = binaryReader.BaseStream.Position;
-    //        newObj.val = Util.readers[typeof(T)](binaryReader);
-    //        newObj.valLength = (int)(binaryReader.BaseStream.Position - valStartPosition);
-    //        return newObj;
-    //    }
-
-    //    public override void contributeToTreeView(TreeView treeView) {
-    //        var rootNode = new TreeNode(opcode.ToString());
-    //        rootNode.Expand();
-    //        ContextInfo.AddToList(new ContextInfo { DataType = DataType.Opcode });
-    //        rootNode.Nodes.Add("wts = " + wts);
-    //        ContextInfo.AddToList(new ContextInfo { Length = 1 });
-    //        rootNode.Nodes.Add("sender = " + Utility.FormatHex(sender));
-    //        ContextInfo.AddToList(new ContextInfo { DataType = DataType.ObjectID });
-    //        rootNode.Nodes.Add("stype = " + stype);
-    //        ContextInfo.AddToList(new ContextInfo { Length = 4 });
-    //        var updateValues = new QualityValues { opcode = opcode, stype = stype, val = val, valLength = valLength };
-    //        updateValues.ContributeValuesToTreeView(rootNode);
-    //        rootNode.ExpandAll();
-    //        treeView.Nodes.Add(rootNode);
-    //    }
-    //}
+        public static UpdateQualityEvent<TSType, T> read(PacketOpcode opcode, BinaryReader binaryReader)
+        {
+            var newObj = new UpdateQualityEvent<TSType, T>();
+            newObj.opcode = opcode;
+            newObj.wts = binaryReader.ReadByte();
+            newObj.sender = binaryReader.ReadUInt32();
+            newObj.stype = (TSType)Enum.ToObject(typeof(TSType), binaryReader.ReadUInt32());
+            var valStartPosition = binaryReader.BaseStream.Position;
+            newObj.val = Util.readers[typeof(T)](binaryReader);
+            newObj.valLength = (int)(binaryReader.BaseStream.Position - valStartPosition);
+            return newObj;
+        }
+    }
 
     //public class QualityValues
     //{

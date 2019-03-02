@@ -26,7 +26,7 @@ namespace deathreconstruction
 
             LoadFile(fileName);
 
-            List<Tuple<int, int>> deathRecords = FindDeaths();
+            List<Tuple<int, int, uint>> deathRecords = FindDeaths();
             if (deathRecords.Count == 0)
             {
                 // no valid deaths found
@@ -40,6 +40,7 @@ namespace deathreconstruction
             character = new Character();
             otherObjects = new Dictionary<uint, Item>();
 
+            character.ID = deathRecords[0].Item3;
             for (int i = deathRecords[0].Item1; i < records.Count; i++)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
@@ -58,7 +59,7 @@ namespace deathreconstruction
                             }
                         case PacketOpcode.Evt_Physics__CreateObject_ID:
                             {
-                                uint ID = CreateObject(messageDataReader);
+                                CreateObject(messageDataReader);
                                 break;
                             }
                         case PacketOpcode.INVENTORY_PUT_OBJ_IN_CONTAINER_EVENT:
@@ -93,7 +94,12 @@ namespace deathreconstruction
                             }
                         case PacketOpcode.Evt_Qualities__PrivateUpdateInt_ID:
                             {
-                                UpdatePrivateInt(messageDataReader, opcode);
+                                UpdatePrivateQuality(messageDataReader, opcode);
+                                break;
+                            }
+                        case PacketOpcode.Evt_Qualities__UpdateInstanceID_ID:
+                            {
+                                UpdateQuality(messageDataReader, opcode);
                                 break;
                             }
                         default:
@@ -126,7 +132,9 @@ namespace deathreconstruction
                         // skip forward
                         character = new Character();
                         otherObjects = new Dictionary<uint, Item>();
+
                         i = deathRecords[deathIndex].Item1;
+                        character.ID = deathRecords[deathIndex].Item3;
                     }
                 }
             }
@@ -134,11 +142,11 @@ namespace deathreconstruction
         }
 
         // find login descriptions followed by deaths of the logged in character
-        private List<Tuple<int, int>> FindDeaths()
+        private List<Tuple<int, int, uint>> FindDeaths()
         {
             uint characterID = uint.MaxValue;
             uint loginCharacterID = 0x0;
-            List<Tuple<int, int>> deathRecords = new List<Tuple<int, int>>();
+            List<Tuple<int, int, uint>> deathRecords = new List<Tuple<int, int, uint>>();
             int startRecord = -1;
 
             for (int i = 0; i < records.Count; i++)
@@ -170,7 +178,7 @@ namespace deathreconstruction
                                 // we have a player descrption event for this death
                                 if (characterID == loginCharacterID)
                                 {
-                                    deathRecords.Add(new Tuple<int, int>(startRecord, i));
+                                    deathRecords.Add(new Tuple<int, int, uint>(startRecord, i, loginCharacterID));
                                 }
                                 break;
                             }
@@ -253,6 +261,11 @@ namespace deathreconstruction
             // level
             character.Name = message.CACQualities.CBaseQualities._strStatsTable.hashTable[STypeString.NAME_STRING].ToString();
             character.Level = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.LEVEL_INT];
+            if (message.CACQualities.CBaseQualities._intStatsTable.hashTable.ContainsKey(STypeInt.AUGMENTATION_LESS_DEATH_ITEM_LOSS_INT))
+            {
+                character.DeathAugmentations = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.AUGMENTATION_LESS_DEATH_ITEM_LOSS_INT];
+            }
+
             // pack items
             foreach (CM_Inventory.ContentProfile item in message.clist.list)
             {
@@ -262,9 +275,9 @@ namespace deathreconstruction
                 uint id = item.m_iid;
                 if (otherObjects.TryGetValue(id, out addedItem))
                 {
-                    // moving pack in world into inventory
+                    // moving item in world into inventory
                     character.UpdateItem(addedItem);
-                    if (item.m_uContainerProperties == (uint)ContainerProperties.Container)
+                    if (item.m_uContainerProperties == (uint)ContainerProperties.Container) // it's a container
                     {
                         // look for items in the world in this container to add
                         foreach (Item otherItem in new List<Item>(otherObjects.Values))
@@ -283,29 +296,52 @@ namespace deathreconstruction
             foreach (CM_Login.InventoryPlacement item in message.ilist.list)
             {
                 character.AddWieldedItem(item);
+
+                Item addedItem;
+                uint id = item.iid_;
+                // moving item in world into inventory
+                if (otherObjects.TryGetValue(id, out addedItem))
+                {
+                    // moving item in world into inventory
+                    character.UpdateItem(addedItem);
+                    otherObjects.Remove(id);
+                }
             }
         }
 
 
-        private uint CreateObject(BinaryReader messageDataReader)
+        private void CreateObject(BinaryReader messageDataReader)
         {
             CM_Physics.CreateObject message = CM_Physics.CreateObject.read(messageDataReader);
 
             uint id = message.object_id;
             Item item = new Item(id, message.wdesc);
+            // in world, stays in world
+            // in world, moves to inventory
+            // in inventory, stays in inventory
+            // in inventory, moves to world
 
-            if (!character.UpdateItem(item))
+            if (character.Contains(item.ContainerID) || character.ID == item.WielderID)
+            {
+                character.UpdateItem(item);
+                if (otherObjects.ContainsKey(id))
+                {
+                    otherObjects.Remove(id);
+                }
+            }
+            else // goes to world
             {
                 if (otherObjects.ContainsKey(id))
                 {
+                    // updated item in world
                     otherObjects[id] = item;
                 }
                 else
                 {
+                    // spawned item in world
                     otherObjects.Add(id, item);
                 }
             }
-            return id;
         }
 
         private void PutObjectInContainer(BinaryReader messageDataReader)
@@ -376,11 +412,12 @@ namespace deathreconstruction
             CM_Inventory.ViewContents message = CM_Inventory.ViewContents.read(messageDataReader);
 
             uint containerID = message.i_container;
-            if (character.FindItem(containerID) != null)
+            Item item = character.FindItem(containerID);
+            if (item != null)
             {
-                foreach (var item in message.contents_list.list)
+                foreach (var containedItem in message.contents_list.list)
                 {
-                    character.AddItemToContainer(item, containerID);
+                    character.AddItemToContainer(containedItem, containerID);
                 }
             }
             else
@@ -392,11 +429,11 @@ namespace deathreconstruction
                 else
                 {
                     otherObjects.Add(containerID, new Item(containerID));
-                    foreach (var item in message.contents_list.list)
+                    foreach (var containedItem in message.contents_list.list)
                     {
-                        Item addedItem = new Item(item.m_iid);
+                        Item addedItem = new Item(containedItem.m_iid);
                         addedItem.ContainerID = containerID;
-                        otherObjects.Add(item.m_iid, addedItem);
+                        otherObjects.Add(containedItem.m_iid, addedItem);
                     }
                 }
             }
@@ -437,13 +474,50 @@ namespace deathreconstruction
             }
         }
 
-        private void UpdatePrivateInt(BinaryReader messageDataReader, PacketOpcode opcode)
+        private void UpdatePrivateQuality(BinaryReader messageDataReader, PacketOpcode opcode)
         {
             CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int> message = CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int>.read(opcode, messageDataReader);
 
             if (message.stype == STypeInt.LEVEL_INT)
             {
                 character.Level = message.val;
+            }
+        }
+
+        private void UpdateQuality(BinaryReader messageDataReader, PacketOpcode opcode)
+        {
+            CM_Qualities.UpdateQualityEvent<STypeIID, uint> message = CM_Qualities.UpdateQualityEvent<STypeIID, uint>.read(opcode, messageDataReader);
+
+            uint id = message.sender;
+            uint containerId = message.val;
+
+            if (message.stype == STypeIID.CONTAINER_IID)
+            {
+                if (character.Contains(containerId))
+                {
+                    Item item = character.FindItem(id);
+                    if (item != null)
+                    {
+                        item.ContainerID = containerId;
+                        character.UpdateItem(item);
+                    }
+                    else if (otherObjects.TryGetValue(id, out item))
+                    {
+                        character.AddItemToContainer(item, containerId);
+                        otherObjects.Remove(id);
+                    }
+                    else
+                    {
+                        Debug.Assert(false);
+                    }
+                }
+            }
+            else if (message.stype == STypeIID.WIELDER_IID)
+            {
+                if (character.FindItem(message.sender) != null)
+                {
+                    character.WieldItem(message.sender);
+                }
             }
         }
     }

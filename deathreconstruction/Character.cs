@@ -10,6 +10,7 @@ namespace deathreconstruction
         public uint ID;
         public int Level;
         public string Name;
+        public int DeathAugmentations;
 
         private Dictionary<uint, Item> inventory;
         private Dictionary<uint, Item> packs;
@@ -22,6 +23,7 @@ namespace deathreconstruction
             ID = 0x0;
             Level = 0;
             Name = "";
+            DeathAugmentations = 0;
             inventory = new Dictionary<uint, Item>();
             packs = new Dictionary<uint, Item>();
             unloadedItems = new List<uint>();
@@ -33,6 +35,7 @@ namespace deathreconstruction
             ID = characterToCopy.ID;
             Level = characterToCopy.Level;
             Name = characterToCopy.Name;
+            DeathAugmentations = characterToCopy.DeathAugmentations;
             inventory = characterToCopy.inventory.ToDictionary(x => x.Key, x => x.Value.Copy());
             packs = characterToCopy.packs.ToDictionary(x => x.Key, x => x.Value.Copy());
 
@@ -65,7 +68,7 @@ namespace deathreconstruction
             inventory[item.iid_] = new Item(item.iid_, ID);
         }
 
-        public bool UpdateItem(Item item)
+        public void UpdateItem(Item item)
         {
             if (inventory.ContainsKey(item.ID))
             {
@@ -77,7 +80,8 @@ namespace deathreconstruction
             }
             else
             {
-                return false;
+                Debug.Assert(item.ContainerID == ID || item.WielderID == ID);
+                AddItem(item);
             }
             unloadedItems.Remove(item.ID);
             if (!initialItemsPrinted && unloadedItems.Count == 0)
@@ -85,7 +89,6 @@ namespace deathreconstruction
                 //PrintInventory();
                 initialItemsPrinted = true;
             }
-            return true;
         }
 
         public bool UpdateStackSize(uint itemID, uint stackSize, uint value)

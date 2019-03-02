@@ -34,6 +34,7 @@ namespace deathreconstruction
             //    character.FindItem(itemID).Print();
             //}
 
+            Console.WriteLine(character.Name + " " + character.Level + " (" + character.DeathAugmentations + " death augmentations)");
             Console.WriteLine(testDeathText);
             AlwaysDrop();
             return ByClass();
@@ -112,7 +113,7 @@ namespace deathreconstruction
                 Console.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + parsedItems[0]);
                 return false;
             }
-            Console.WriteLine("Pyreals good");
+            //Console.WriteLine("Pyreals good");
             parsedItems.RemoveAt(0);
 
             // check we found all death drops
@@ -121,7 +122,7 @@ namespace deathreconstruction
                 Console.WriteLine("Didn't find all the dropped items, found: " + droppedItems.Count + " actual: " + parsedItems.Count);
                 return false;
             }
-            Console.WriteLine("Found all dropped items");
+            //Console.WriteLine("Found all dropped items");
 
             // check found in same order and their naming in death string
             // TODO: fix for pluralization
@@ -135,14 +136,11 @@ namespace deathreconstruction
                     nameOrdering = false;
                 }
             }
-            if (nameOrdering)
-            {
-                Console.WriteLine("Names good");
-            }
-            else
+            if (!nameOrdering)
             {
                 return false;
             }
+            //Console.WriteLine("Names good");
 
             bool wielded = false;
             if (character.Level > 35)
@@ -162,7 +160,7 @@ namespace deathreconstruction
                     }
                 }
             }
-            Console.WriteLine("Wielded good");
+            //Console.WriteLine("Wielded good");
 
             // ensure always dropped or destroyed
             // TODO: determine ordering of always drops
@@ -204,7 +202,7 @@ namespace deathreconstruction
                     return false;
                 }
             }
-            Console.WriteLine("Always drops good");
+            //Console.WriteLine("Always drops good");
 
             // work only with normal drops
             droppedItems.RemoveRange(0, numberAlwaysDropped);
@@ -229,13 +227,20 @@ namespace deathreconstruction
                 droppedItemsMin = character.Level / 20;
                 droppedItemsMax = droppedItemsMin + 2;
             }
+            if (character.DeathAugmentations > 0)
+            {
+                droppedItemsMin -= character.DeathAugmentations * 5;
+                droppedItemsMax -= character.DeathAugmentations * 5;
+                droppedItemsMin = Math.Max(droppedItemsMin, 0);
+                droppedItemsMax = Math.Max(droppedItemsMax, 0);
+            }
 
             if (droppedItems.Count < droppedItemsMin || droppedItems.Count > droppedItemsMax)
             {
                 Console.WriteLine("Number of normal drops range predicted: (" + droppedItemsMin + ", " + droppedItemsMax + ") actual: " + droppedItems.Count);
                 return false;
             }
-            Console.WriteLine("Number of normal drops good");
+            //Console.WriteLine("Number of normal drops good");
 
             // ensure items dropped and ordering possible by value
 
@@ -278,7 +283,8 @@ namespace deathreconstruction
                 }
 
             }
-            Console.WriteLine("Dropped items good");
+            //Console.WriteLine("Dropped items good");
+            Console.WriteLine("Everything good");
 
             return true;
         }
@@ -293,8 +299,8 @@ namespace deathreconstruction
 
             // TODO: investigate named tuples
             // TODO: cache results
-            Stopwatch stopWatch = new Stopwatch();
-            stopWatch.Start();
+            //Stopwatch stopWatch = new Stopwatch();
+            //stopWatch.Start();
 
             string createdPath = "..\\Debug\\Data\\weenies\\";
             string cachedPath = "..\\Debug\\Data\\cached\\";
@@ -347,12 +353,12 @@ namespace deathreconstruction
                 //    Console.WriteLine(fileNamePair.Item1.Name);
                 //}
             }
-            stopWatch.Stop();
-            TimeSpan ts = stopWatch.Elapsed;
-            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
-                        ts.Hours, ts.Minutes, ts.Seconds,
-                        ts.Milliseconds / 10);
-            Console.WriteLine("RunTime " + elapsedTime);
+            //stopWatch.Stop();
+            //TimeSpan ts = stopWatch.Elapsed;
+            //string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+            //            ts.Hours, ts.Minutes, ts.Seconds,
+            //            ts.Milliseconds / 10);
+            //Console.WriteLine("RunTime " + elapsedTime);
         }
 
         // grabs BONDED_INT quick and dirty
