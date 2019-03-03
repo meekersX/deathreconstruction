@@ -42,9 +42,16 @@ namespace deathreconstruction
             Debug.Assert(characterToCopy.unloadedItems.Count == 0);
         }
 
-        public void AddItem(Item item)
+        public void AddItem(Item item, bool pack = false)
         {
-            inventory.Add(item.ID, item);
+            if (pack)
+            {
+                packs.Add(item.ID, item);
+            }
+            else
+            {
+                inventory.Add(item.ID, item);
+            }
         }
 
         public Item AddItem(CM_Inventory.ContentProfile item)
@@ -52,27 +59,56 @@ namespace deathreconstruction
             Item addedItem = new Item(item.m_iid);
             if (item.m_uContainerProperties == (uint)ContainerProperties.None)
             {
-                inventory[item.m_iid] = addedItem;
+                if (!inventory.ContainsKey(item.m_iid))
+                {
+                    inventory.Add(item.m_iid, addedItem);
+                    unloadedItems.Add(item.m_iid);
+                }
             }
             else
             {
-                packs[item.m_iid] = addedItem;
+                if (inventory.ContainsKey(item.m_iid))
+                {
+                    packs.Add(item.m_iid, inventory[item.m_iid]);
+                    inventory.Remove(item.m_iid);
+                }
+                else if (!packs.ContainsKey(item.m_iid))
+                {
+                    packs.Add(item.m_iid, addedItem);
+                    unloadedItems.Add(item.m_iid);
+                }
             }
-            unloadedItems.Add(item.m_iid);
+
             return addedItem;
         }
 
         public void AddWieldedItem(CM_Login.InventoryPlacement item)
         {
-            unloadedItems.Add(item.iid_);
-            inventory[item.iid_] = new Item(item.iid_, ID);
+            Item oldItem;
+            if (inventory.TryGetValue(item.iid_, out oldItem))
+            {
+                oldItem.WielderID = ID;
+            }
+            else
+            {
+                inventory[item.iid_] = new Item(item.iid_, ID);
+                unloadedItems.Add(item.iid_);
+            }
         }
 
-        public void UpdateItem(Item item)
+        public void UpdateItem(Item item, bool pack = false)
         {
             if (inventory.ContainsKey(item.ID))
             {
-                inventory[item.ID] = item;
+                if (pack)
+                {
+                    packs[item.ID] = inventory[item.ID];
+                    inventory.Remove(item.ID);
+                }
+                else
+                {
+                    inventory[item.ID] = item;
+                }
             }
             else if (packs.ContainsKey(item.ID))
             {
@@ -81,7 +117,7 @@ namespace deathreconstruction
             else
             {
                 Debug.Assert(item.ContainerID == ID || item.WielderID == ID);
-                AddItem(item);
+                AddItem(item, pack);
             }
             unloadedItems.Remove(item.ID);
             if (!initialItemsPrinted && unloadedItems.Count == 0)
@@ -162,6 +198,7 @@ namespace deathreconstruction
         {
             Item addedItem = AddItem(item);
             addedItem.ContainerID = containerID;
+            unloadedItems.Remove(item.m_iid);
         }
 
         public void AddItemToContainer(Item item, uint containerID)

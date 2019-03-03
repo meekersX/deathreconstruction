@@ -276,7 +276,7 @@ namespace deathreconstruction
                 if (otherObjects.TryGetValue(id, out addedItem))
                 {
                     // moving item in world into inventory
-                    character.UpdateItem(addedItem);
+                    character.UpdateItem(addedItem, item.m_uContainerProperties == (uint)ContainerProperties.Container);
                     if (item.m_uContainerProperties == (uint)ContainerProperties.Container) // it's a container
                     {
                         // look for items in the world in this container to add
@@ -415,23 +415,40 @@ namespace deathreconstruction
             Item item = character.FindItem(containerID);
             if (item != null)
             {
-                foreach (var containedItem in message.contents_list.list)
+                // pack already in inventory, move contained items into inventory
+                character.UpdateItem(item, true);
+                foreach (CM_Inventory.ContentProfile containedItem in message.contents_list.list)
                 {
-                    character.AddItemToContainer(containedItem, containerID);
+                    Item addedItem;
+                    if (otherObjects.TryGetValue(containedItem.m_iid, out addedItem))
+                    {
+                        character.AddItem(addedItem);
+                        otherObjects.Remove(containedItem.m_iid);
+                    }
+                    else
+                    {
+                        character.AddItemToContainer(containedItem, containerID);
+                    }
                 }
             }
             else
             {
-                Item containerItem;
-                if (otherObjects.TryGetValue(containerID, out containerItem))
-                {
-                }
-                else
+                // pack not in inventory, add to world
+                if (!otherObjects.ContainsKey(containerID))
                 {
                     otherObjects.Add(containerID, new Item(containerID));
-                    foreach (var containedItem in message.contents_list.list)
+                }
+                // update or add contained items in world
+                foreach (CM_Inventory.ContentProfile containedItem in message.contents_list.list)
+                {
+                    Item addedItem;
+                    if (otherObjects.TryGetValue(containedItem.m_iid, out addedItem))
                     {
-                        Item addedItem = new Item(containedItem.m_iid);
+                        addedItem.ContainerID = containerID;
+                    }
+                    else
+                    {
+                        addedItem = new Item(containedItem.m_iid);
                         addedItem.ContainerID = containerID;
                         otherObjects.Add(containedItem.m_iid, addedItem);
                     }
