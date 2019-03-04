@@ -198,14 +198,15 @@ namespace deathreconstruction
         {
             uint affectedCharacterID = character.ID;
             List<uint> droppedItems = new List<uint>();
+            List<uint> unknownItems = new List<uint>();
             string deathText = null;
             int lastDeathRecord = deathRecord;
+            int deathTextRecord;
 
             int i;
             if (character.PKStatus != PKStatusEnum.PKLite_PKStatus)
             {
                 // find the death text, assumes printed after all items are moved
-                // need to update for no items dropped
                 for (i = deathRecord + 1; i < records.Count; i++)
                 {
                     using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
@@ -231,8 +232,10 @@ namespace deathreconstruction
             }
             else
             {
-                return new Tuple<List<uint>, string, int>(new List<uint>(), "<PKLite Death>", 0);
+                return new Tuple<List<uint>, string, int>(new List<uint>(), "<PKLite Death>", lastDeathRecord);
             }
+
+            deathTextRecord = i;
 
             for (--i; i > deathRecord; i--)
             {
@@ -252,10 +255,18 @@ namespace deathreconstruction
                             {
                                 lastDeathRecord = i;
                             }
+                            unknownItems.Remove(message.i_objectId);
                         }
                         else
                         {
                             droppedItems.Add(message.i_objectId);
+
+                            Item item;
+                            if (!character.FindItem(message.i_objectId, out item))
+                            {
+                                // look for stack size adjustment
+                                unknownItems.Add(message.i_objectId);
+                            }
                         }
                     }
                     else if (opcode == PacketOpcode.PLAYER_DEATH_EVENT)
@@ -268,6 +279,35 @@ namespace deathreconstruction
                             {
                                 character.PlayerKill = true;
                             }
+                        }
+                    }
+                }
+            }
+
+            for (i = deathTextRecord + 1; i < records.Count && unknownItems.Count > 0; i++)
+            {
+                using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
+                {
+                    PacketOpcode opcode = Util.readOrderedOpcode(messageDataReader, ref affectedCharacterID);
+
+                    if (opcode == PacketOpcode.STACKABLE_SET_STACKSIZE_EVENT)
+                    {
+                        CM_Inventory.UpdateStackSize message = CM_Inventory.UpdateStackSize.read(messageDataReader);
+
+                        Debug.Assert(affectedCharacterID == character.ID);
+                        Item item;
+                        if (character.FindItem(message.item, out item) && !item.Name.Equals("Pyreal"))
+                        {
+                            for (int j = 0; j < droppedItems.Count; j++)
+                            {
+                                Item droppedItem;
+                                if (!character.FindItem(droppedItems[j], out droppedItem))
+                                {
+                                    droppedItems[j] = item.ID;
+                                    break;
+                                }
+                            }
+                            unknownItems.RemoveAt(0);
                         }
                     }
                 }
@@ -302,19 +342,24 @@ namespace deathreconstruction
                 {
                     // moving item in world into inventory
                     character.UpdateItem(addedItem, item.m_uContainerProperties == (uint)ContainerProperties.Container);
-                    if (item.m_uContainerProperties == (uint)ContainerProperties.Container) // it's a container
+                    otherObjects.Remove(id);
+                }
+                if (item.m_uContainerProperties == (uint)ContainerProperties.Container) // it's a container
+                {
+                    // pack might need moving
+                    if (character.FindItem(id, out addedItem))
                     {
-                        // look for items in the world in this container to add
-                        foreach (Item otherItem in new List<Item>(otherObjects.Values))
+                        character.UpdateItem(addedItem, item.m_uContainerProperties == (uint)ContainerProperties.Container);
+                    }
+                    // look for items in the world in this container to add
+                    foreach (Item otherItem in new List<Item>(otherObjects.Values))
+                    {
+                        if (otherItem.ContainerID == id)
                         {
-                            if (otherItem.ContainerID == id)
-                            {
-                                character.AddItem(otherItem);
-                                otherObjects.Remove(otherItem.ID);
-                            }
+                            character.AddItem(otherItem);
+                            otherObjects.Remove(otherItem.ID);
                         }
                     }
-                    otherObjects.Remove(id);
                 }
             }
             // wielded items
@@ -389,8 +434,21 @@ namespace deathreconstruction
                 if (character.Contains(containerID))
                 {
                     // moving item in world into inventory
-                    character.AddItemToContainer(item, containerID);
+                    item.ContainerID = containerID;
+                    character.AddItem(item, type != ContainerProperties.None);
                     otherObjects.Remove(id);
+                    if (type == ContainerProperties.Container)
+                    {
+                        foreach (Item containedItem in new List<Item>(otherObjects.Values))
+                        {
+                            if (containedItem.ContainerID == item.ID)
+                            {
+                                character.AddItem(containedItem);
+                                otherObjects.Remove(containedItem.ID);
+                            }
+                        }
+                        otherObjects.Remove(id);
+                    }
                 }
                 else
                 {
@@ -418,6 +476,14 @@ namespace deathreconstruction
         {
             CM_Inventory.WieldItem message = CM_Inventory.WieldItem.read(messageDataReader);
 
+            uint id = message.i_item;
+            Item item;
+
+            if (otherObjects.TryGetValue(id, out item))
+            {
+                character.AddItem(item);
+                otherObjects.Remove(id);
+            }
             character.WieldItem(message.i_item);
         }
 
@@ -425,9 +491,21 @@ namespace deathreconstruction
         {
             CM_Inventory.RemoveObject message = CM_Inventory.RemoveObject.read(messageDataReader);
 
-            if (character.RemoveItem(message.i_item) == null)
+            List<Item> items = character.RemoveItem(message.i_item);
+            if (items == null)
             {
-                otherObjects.Remove(message.i_item);
+                Item item;
+                if (otherObjects.TryGetValue(message.i_item, out item))
+                {
+                    otherObjects.Remove(message.i_item);
+                    foreach (Item containedItem in new List<Item>(otherObjects.Values))
+                    {
+                        if (containedItem.ContainerID == item.ID)
+                        {
+                            otherObjects.Remove(containedItem.ID);
+                        }
+                    }
+                }
             }
         }
 
@@ -436,8 +514,8 @@ namespace deathreconstruction
             CM_Inventory.ViewContents message = CM_Inventory.ViewContents.read(messageDataReader);
 
             uint containerID = message.i_container;
-            Item item = character.FindItem(containerID);
-            if (item != null)
+            Item item;
+            if (character.FindItem(containerID, out item))
             {
                 // pack already in inventory, move contained items into inventory
                 character.UpdateItem(item, true);
@@ -503,10 +581,13 @@ namespace deathreconstruction
 
             uint id = message.ObjectID;
 
-            Item item = character.RemoveItem(id);
-            if (item != null)
+            List<Item> items = character.RemoveItem(id);
+            if (items != null)
             {
-                otherObjects.Add(id, item);
+                foreach (Item item in items)
+                {
+                    otherObjects.Add(item.ID, item);
+                }
             }
             else
             {
@@ -539,15 +620,14 @@ namespace deathreconstruction
         {
             CM_Qualities.UpdateQualityEvent<STypeIID, uint> message = CM_Qualities.UpdateQualityEvent<STypeIID, uint>.read(opcode, messageDataReader);
 
-            uint id = message.sender;
-            uint containerId = message.val;
-
             if (message.stype == STypeIID.CONTAINER_IID)
             {
+                uint id = message.sender;
+                uint containerId = message.val;
                 if (character.Contains(containerId))
                 {
-                    Item item = character.FindItem(id);
-                    if (item != null)
+                    Item item;
+                    if (character.FindItem(id, out item))
                     {
                         item.ContainerID = containerId;
                         character.UpdateItem(item);
@@ -565,9 +645,10 @@ namespace deathreconstruction
             }
             else if (message.stype == STypeIID.WIELDER_IID)
             {
-                if (character.FindItem(message.sender) != null)
+                Item item;
+                if (character.FindItem(message.sender, out item))
                 {
-                    character.WieldItem(message.sender);
+                    item.WielderID = message.val;
                 }
             }
         }

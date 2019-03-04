@@ -13,6 +13,19 @@ namespace deathreconstruction
         private Character character;
         private List<uint> droppedItemIDs;
         private string deathText;
+        StreamWriter output;
+
+        public HypothesisTester(StreamWriter createdOutput = null)
+        {
+            if (createdOutput != null)
+            {
+                output = createdOutput;
+            }
+            else
+            {
+                output = new StreamWriter(Console.OpenStandardInput());
+            }
+        }
 
         // things to test:
         // item ordering in message
@@ -34,10 +47,12 @@ namespace deathreconstruction
             //    character.FindItem(itemID).Print();
             //}
 
-            Console.WriteLine(character.Name + " " + character.Level + " (" + character.DeathAugmentations + " death augmentations)");
-            Console.WriteLine(testDeathText);
+            output.WriteLine(character.Name + " " + character.Level + " (" + character.DeathAugmentations + " death augmentations)");
+            output.WriteLine(testDeathText);
             AlwaysDrop();
-            return ByClass();
+            bool result = ByClass();
+            output.WriteLine();
+            return result;
         }
 
         private IEnumerable<Tuple<uint, Item>> SortedValue(bool includeWielded = true)
@@ -55,7 +70,9 @@ namespace deathreconstruction
                         if (item.Type != ITEM_TYPE.TYPE_MONEY
                             && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE
                             && item.Type != ITEM_TYPE.TYPE_MISC
-                            && item.Type != ITEM_TYPE.TYPE_TINKERING_TOOL)
+                            && item.Type != ITEM_TYPE.TYPE_TINKERING_TOOL
+                            && item.Type != ITEM_TYPE.TYPE_FOOD
+                            && item.Type != ITEM_TYPE.TYPE_CRAFT_FLETCHING_INTERMEDIATE)
                         {
                             valueMapping.Add(new Tuple<uint, Item>(item.Value / item.StackSize, item));
                         }
@@ -85,13 +102,20 @@ namespace deathreconstruction
         {
             int i;
 
+            if (character.PKStatus == PKStatusEnum.PKLite_PKStatus)
+            {
+                return true;
+            }
+
             List<Item> droppedItems = new List<Item>(droppedItemIDs.Count);
             foreach (uint droppedItemID in droppedItemIDs)
             {
-                droppedItems.Add(character.FindItem(droppedItemID));
+                Item item;
+                character.FindItem(droppedItemID, out item);
+                droppedItems.Add(item);
             }
 
-            string pattern = @"^You've lost(?: ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?)?(?: your ([^,]+),)*(?: and your ([^,]+)){0,1}!$";
+            string pattern = @"^You've lost(?: ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?)?(?: your ([^,]+),?)*(?: and your ([^,]+))?!$";
             Match match = Regex.Match(deathText, pattern);
 
             List<string> parsedItems = new List<string>(droppedItemIDs.Count + 1);
@@ -105,7 +129,7 @@ namespace deathreconstruction
 
             uint droppedPyreals = 0;
 
-            if (character.Level > 5)
+            if (character.Level >= 5)
             {
                 droppedPyreals = (TotalPyreals() + 1) / 2;
             }
@@ -113,40 +137,69 @@ namespace deathreconstruction
             // verify pyreal count
             if (!droppedPyreals.ToString("N0").Equals(parsedItems[0]) && (droppedPyreals > 0 || parsedItems[0].Contains("Pyreal")))
             {
-                Console.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + parsedItems[0]);
+                output.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + parsedItems[0]);
                 return false;
             }
             if (droppedPyreals > 0)
             {
                 parsedItems.RemoveAt(0);
             }
-            //Console.WriteLine("Pyreals good");
+            //output.WriteLine("Pyreals good");
 
             // check we found all death drops
-            if (droppedItems.Count != parsedItems.Count)
+            if (droppedItems.Count < parsedItems.Count)
             {
-                Console.WriteLine("Didn't find all the dropped items, found: " + droppedItems.Count + " actual: " + parsedItems.Count);
+                output.WriteLine("Didn't find all the dropped items, found: " + droppedItems.Count + " actual: " + parsedItems.Count);
                 return false;
             }
-            //Console.WriteLine("Found all dropped items");
+            //output.WriteLine("Found all dropped items");
 
             // check found in same order and their naming in death string
-            // TODO: fix for pluralization
             parsedItems.Reverse();
             bool nameOrdering = true;
-            for (i = 0; i < droppedItems.Count; i++)
+            int currentDrop = 0;
+            foreach (string parsedItem in parsedItems)
             {
-                if (droppedItems[i].Name != parsedItems[i])
+                if (!parsedItem.Equals(droppedItems[currentDrop].Name))
                 {
-                    Console.WriteLine("Name predicted: " + droppedItems[i].Name + " actual: " + parsedItems[i]);
-                    nameOrdering = false;
+                    if (droppedItems[currentDrop].BondedStatus == BondedStatusEnum.Slippery_BondedStatus && parsedItem.Equals(droppedItems[currentDrop].PluralName) && droppedItems[currentDrop].StackSize > 1)
+                    {
+                        // might not be stacked
+                        currentDrop++;
+                    }
+                    else
+                    {
+                        int j;
+                        for (j = droppedItems.Count - 1; j > currentDrop; j--)
+                        {
+                            if (parsedItem.Equals(droppedItems[j].Name))
+                            {
+                                // move to this position
+                                Item droppedItem = droppedItems[j];
+                                droppedItems.RemoveAt(j);
+                                droppedItems.Insert(currentDrop, droppedItem);
+                                break;
+                            }
+                        }
+                        if (j == currentDrop)
+                        {
+                            // failed to find item
+                            output.WriteLine("Name predicted: " + droppedItems[currentDrop].Name + " actual: " + parsedItem);
+                            nameOrdering = false;
+                        }
+                        currentDrop++;
+                    }
+                }
+                else
+                {
+                    currentDrop++;
                 }
             }
             if (!nameOrdering)
             {
                 return false;
             }
-            //Console.WriteLine("Names good");
+            //output.WriteLine("Names good");
 
             bool wielded = false;
             if (character.Level > 35 || (character.PlayerKill && character.PKStatus == PKStatusEnum.PK_PKStatus))
@@ -160,13 +213,13 @@ namespace deathreconstruction
                 {
                     if (item.WielderID == character.ID)
                     {
-                        Console.Write("No wielded drops predicted, but dropped: ");
+                        output.Write("No wielded drops predicted, but dropped: ");
                         item.Print();
                         return false;
                     }
                 }
             }
-            //Console.WriteLine("Wielded good");
+            //output.WriteLine("Wielded good");
 
             // ensure always dropped or destroyed
             // TODO: determine ordering of always drops
@@ -185,14 +238,14 @@ namespace deathreconstruction
             }
             if (numberAlwaysDropped > droppedItems.Count)
             {
-                Console.WriteLine("More always drop predicted than drops");
+                output.WriteLine("More always drop predicted than drops");
                 return false;
             }
             for (i = 0; i < numberAlwaysDropped; i++)
             {
                 if (droppedItems[i].BondedStatus == BondedStatusEnum.Normal_BondedStatus)
                 {
-                    Console.WriteLine("Always drop predicted, but normal drop found");
+                    output.WriteLine("Always drop predicted, but normal drop found");
                     foreach (Item item in alwaysDroppedItem)
                     {
                         item.Print();
@@ -204,15 +257,19 @@ namespace deathreconstruction
             {
                 if (droppedItems[i].BondedStatus != BondedStatusEnum.Normal_BondedStatus)
                 {
-                    Console.WriteLine("Normal drop predicted, but always drop found");
+                    output.WriteLine("Normal drop predicted, but always drop found");
                     return false;
                 }
             }
-            //Console.WriteLine("Always drops good");
+            //output.WriteLine("Always drops good");
 
             // work only with normal drops
             droppedItems.RemoveRange(0, numberAlwaysDropped);
             parsedItems.RemoveRange(0, numberAlwaysDropped);
+
+            // get inventory sorted by value
+            // TODO: think more about stacking items
+            List<Tuple<uint, Item>> valueMapping = new List<Tuple<uint, Item>>(SortedValue(wielded));
 
             // ensure number of normal dropped in range
             int droppedItemsMin;
@@ -244,38 +301,18 @@ namespace deathreconstruction
             }
             else // PK death
             {
-                if (character.Level >= 10)
-                {
-                    droppedItemsMin = (Math.Min(character.Level, 126) + 9) / 10;
-                }
-                else
-                {
-                    droppedItemsMin = 0;
-                }
-                if (character.Level >= 10)
-                {
-                    droppedItemsMax = droppedItemsMin + 2;
-                }
-                else
-                {
-                    droppedItemsMax = droppedItemsMin;
-                }
-
+                droppedItemsMin = Math.Min(character.Level, 126) / 10;
+                droppedItemsMax = droppedItemsMin + 2;
             }
 
             if (droppedItems.Count < droppedItemsMin || droppedItems.Count > droppedItemsMax)
             {
-                Console.WriteLine("Number of normal drops range predicted: (" + droppedItemsMin + ", " + droppedItemsMax + ") actual: " + droppedItems.Count);
+                output.WriteLine("Number of normal drops range predicted: (" + droppedItemsMin + ", " + droppedItemsMax + ") actual: " + droppedItems.Count);
                 return false;
             }
-            //Console.WriteLine("Number of normal drops good");
+            //output.WriteLine("Number of normal drops good");
 
             // ensure items dropped and ordering possible by value
-
-            // get inventory sorted by value
-            // TODO: think more about stacking items
-            List<Tuple<uint, Item>> valueMapping = new List<Tuple<uint, Item>>(SortedValue(wielded));
-
             HashSet<ITEM_TYPE> seenTypes = new HashSet<ITEM_TYPE>();
             int ordinal = 1;
             foreach (Item droppedItem in droppedItems)
@@ -305,14 +342,14 @@ namespace deathreconstruction
 
                     if (currentValue > droppedValue)
                     {
-                        Console.WriteLine(currentItem.Item2.Name + " is worth more than " + droppedItem.Name);
+                        output.WriteLine(currentItem.Item2.Name + " is worth more than " + droppedItem.Name);
                         return false;
                     }
                 }
 
             }
-            //Console.WriteLine("Dropped items good");
-            Console.WriteLine("Everything good");
+            //output.WriteLine("Dropped items good");
+            output.WriteLine("Everything good");
 
             return true;
         }
@@ -378,7 +415,7 @@ namespace deathreconstruction
 
                 //if (fileNamePair.Item1.BondedStatus != BondedStatusEnum.Normal_BondedStatus)
                 //{
-                //    Console.WriteLine(fileNamePair.Item1.Name);
+                //    output.WriteLine(fileNamePair.Item1.Name);
                 //}
             }
             //stopWatch.Stop();
@@ -386,7 +423,7 @@ namespace deathreconstruction
             //string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
             //            ts.Hours, ts.Minutes, ts.Seconds,
             //            ts.Milliseconds / 10);
-            //Console.WriteLine("RunTime " + elapsedTime);
+            //output.WriteLine("RunTime " + elapsedTime);
         }
 
         // grabs BONDED_INT quick and dirty

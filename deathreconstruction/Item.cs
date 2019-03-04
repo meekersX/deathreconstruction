@@ -6,6 +6,7 @@ namespace deathreconstruction
     {
         public uint ID = 0x0;
         public string Name = "";
+        public string PluralName = "s";
         public uint Value = 0;
         public uint StackSize = 0;
         public uint ContainerID = 0x0;
@@ -24,6 +25,14 @@ namespace deathreconstruction
         {
             ID = itemID;
             Name = wdesc._name.ToString();
+            if (wdesc._plural_name != null)
+            {
+                PluralName = wdesc._plural_name.ToString();
+            }
+            else
+            {
+                PluralName = Name + "s";
+            }
             Value = wdesc._value;
             StackSize = wdesc._stackSize;
             if (StackSize == 0)

@@ -122,7 +122,7 @@ namespace deathreconstruction
             }
             else
             {
-                Debug.Assert(item.ContainerID == ID || item.WielderID == ID);
+                Debug.Assert(Contains(item.ContainerID) || item.WielderID == ID);
                 AddItem(item, pack);
             }
             unloadedItems.Remove(item.ID);
@@ -152,17 +152,17 @@ namespace deathreconstruction
             item.ContainerID = ID;
         }
 
-        public Item FindItem(uint itemID)
+        public bool FindItem(uint itemID, out Item item)
         {
-            if (inventory.ContainsKey(itemID))
+            if (inventory.TryGetValue(itemID, out item))
             {
-                return inventory[itemID];
+                return true;
             }
-            else if (packs.ContainsKey(itemID))
+            else if (packs.TryGetValue(itemID, out item))
             {
-                return packs[itemID];
+                return true;
             }
-            return null;
+            return false;
         }
 
         public bool Contains(uint containerID)
@@ -174,28 +174,27 @@ namespace deathreconstruction
             return false;
         }
 
-        public Item RemoveItem(uint itemID)
+        public List<Item> RemoveItem(uint itemID)
         {
-            Item item = FindItem(itemID);
-
-            if (item != null)
+            List<Item> results = new List<Item>();
+            Item item;
+            if (FindItem(itemID, out item))
             {
-                if (inventory.Remove(itemID))
+                item.ContainerID = 0x0;
+                results.Add(item);
+                foreach (Item containedItem in new List<Item>(inventory.Values))
                 {
-                }
-                else if (packs.Remove(itemID))
-                {
-                    Debug.Assert(false);
-                    foreach (Item itemInPack in inventory.Values)
+                    if (containedItem.ContainerID == item.ID)
                     {
-                        if (itemInPack.ContainerID == itemID)
-                        {
-                            inventory.Remove(ID);
-                            // move to otherobjects?
-                        }
+                        results.Add(containedItem);
+                        inventory.Remove(containedItem.ID);
                     }
                 }
-                return item;
+                if (!inventory.Remove(itemID))
+                {
+                    packs.Remove(itemID);
+                }
+                return results;
             }
             return null;
         }

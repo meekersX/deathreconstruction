@@ -21,37 +21,48 @@ namespace deathreconstruction
             //}
 
 
-            HypothesisTester tester = new HypothesisTester();
-
-            string[] directoryFiles = Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap");
+            //string[] directoryFiles = Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap");
+            string[] directoryFiles =
+            {
+                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485046869_log.pcap",
+                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485735010_log.pcap",
+                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485741839_log.pcap",
+            };
 
             int i = 0;
 
-            string startFileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485152410_log.pcap";
-            for (i = 0; i < directoryFiles.Length; i++)
-            {
-                if (directoryFiles[i].Equals(startFileName))
-                {
-                    break;
-                }
-            }
+            //string startFileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-31_1485843405_log.pcap";
+            //for (i = 0; i < directoryFiles.Length; i++)
+            //{
+            //    if (directoryFiles[i].Equals(startFileName))
+            //    {
+            //        break;
+            //    }
+            //}
 
-            for (; i < directoryFiles.Length; i++)
+            using (StreamWriter output = new StreamWriter("output.txt"))
             {
-                InventoryReconstructor reconstructor = new InventoryReconstructor();
-                List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(directoryFiles[i]);
+                HypothesisTester tester = new HypothesisTester(output);
 
-                bool success = true;
-                foreach (Tuple<Character, List<uint>, string> deathRecord in foundDeaths)
+                for (; i < directoryFiles.Length; i++)
                 {
-                    bool result = tester.Test(deathRecord.Item1, deathRecord.Item2, deathRecord.Item3);
-                    success = success && result;
-                    Console.WriteLine();
+                    InventoryReconstructor reconstructor = new InventoryReconstructor();
+                    List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(directoryFiles[i]);
+                    output.WriteLine(directoryFiles[i]);
+
+                    bool success = true;
+                    foreach (Tuple<Character, List<uint>, string> deathRecord in foundDeaths)
+                    {
+                        bool result = tester.Test(deathRecord.Item1, deathRecord.Item2, deathRecord.Item3);
+                        success = success && result;
+                    }
+                    //if (!success)
+                    //{
+                    //    break;
+                    //}
+                    output.WriteLine();
+                    output.Flush();
                 }
-                //if (!success)
-                //{
-                //    break;
-                //}
             }
         }
 
