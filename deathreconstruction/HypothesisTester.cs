@@ -51,6 +51,10 @@ namespace deathreconstruction
             output.WriteLine(testDeathText);
             AlwaysDrop();
             bool result = ByClass();
+            if (!result)
+            {
+                output.WriteLine("Something bad");
+            }
             output.WriteLine();
             return result;
         }
@@ -67,6 +71,31 @@ namespace deathreconstruction
                 {
                     if (item.BondedStatus == BondedStatusEnum.Normal_BondedStatus)
                     {
+                        // exclude starting Leather Boots
+                        if (item.Wcid == 115 && item.Value == 1100 && item.Name == "Leather Boots")
+                        {
+                            continue;
+                        }
+                        // exclude starting Training Shortbow
+                        if (item.Wcid == 12741)
+                        {
+                            continue;
+                        }
+                        // exclude starting Loose Breeches
+                        if (item.Wcid == 2602 && item.Value == 20 && item.Name == "Loose Breeches")
+                        {
+                            continue;
+                        }
+                        // exclude starting Flared Shirt
+                        if (item.Wcid == 2588 && item.Value == 15 && item.Name == "Flared Shirt")
+                        {
+                            continue;
+                        }
+                        // exclude starting Arrow
+                        if (item.Wcid == 31717)
+                        {
+                            continue;
+                        }
                         if (item.Type != ITEM_TYPE.TYPE_MONEY
                             && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE
                             && item.Type != ITEM_TYPE.TYPE_MISC
@@ -268,7 +297,6 @@ namespace deathreconstruction
             parsedItems.RemoveRange(0, numberAlwaysDropped);
 
             // get inventory sorted by value
-            // TODO: think more about stacking items
             List<Tuple<uint, Item>> valueMapping = new List<Tuple<uint, Item>>(SortedValue(wielded));
 
             // ensure number of normal dropped in range
