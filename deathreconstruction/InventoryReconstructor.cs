@@ -94,12 +94,17 @@ namespace deathreconstruction
                             }
                         case PacketOpcode.Evt_Qualities__PrivateUpdateInt_ID:
                             {
-                                UpdatePrivateQuality(messageDataReader, opcode);
+                                UpdatePrivateInt(messageDataReader, opcode);
+                                break;
+                            }
+                        case PacketOpcode.Evt_Qualities__UpdateInt_ID:
+                            {
+                                UpdateInt(messageDataReader, opcode);
                                 break;
                             }
                         case PacketOpcode.Evt_Qualities__UpdateInstanceID_ID:
                             {
-                                UpdateQuality(messageDataReader, opcode);
+                                UpdateInstanceID(messageDataReader, opcode);
                                 break;
                             }
                         default:
@@ -197,34 +202,38 @@ namespace deathreconstruction
             int lastDeathRecord = deathRecord;
 
             int i;
-            // find the death text, assumes printed after all items are moved
-            // need to update for augments and no items dropped
-            for (i = deathRecord + 1; i < records.Count; i++)
+            if (character.PKStatus != PKStatusEnum.PKLite_PKStatus)
             {
-                using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
+                // find the death text, assumes printed after all items are moved
+                // need to update for no items dropped
+                for (i = deathRecord + 1; i < records.Count; i++)
                 {
-                    PacketOpcode opcode = Util.readUnorderedOpcode(messageDataReader);
-                    if (opcode == PacketOpcode.Evt_Communication__TextboxString_ID)
+                    using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
                     {
-                        CM_Communication.TextBoxString message = CM_Communication.TextBoxString.read(messageDataReader);
-
-                        if (message.ChatMessageType == 0x0)
+                        PacketOpcode opcode = Util.readUnorderedOpcode(messageDataReader);
+                        if (opcode == PacketOpcode.Evt_Communication__TextboxString_ID)
                         {
-                            deathText = message.MessageText.ToString();
+                            CM_Communication.TextBoxString message = CM_Communication.TextBoxString.read(messageDataReader);
 
-                            if (deathText.StartsWith("You've lost"))
+                            if (message.ChatMessageType == 0x0 && message.MessageText.ToString().StartsWith("You've lost"))
                             {
+                                deathText = message.MessageText.ToString();
                                 break;
                             }
                         }
                     }
                 }
+                if (deathText == null)
+                {
+                    // couldn't find death text
+                    return new Tuple<List<uint>, string, int>(new List<uint>(), "<Couldn't find Death Text>", 0);
+                }
             }
-            if (deathText == null)
+            else
             {
-                // couldn't find death text
-                return new Tuple<List<uint>, string, int>(droppedItems, "", 0);
+                return new Tuple<List<uint>, string, int>(new List<uint>(), "<PKLite Death>", 0);
             }
+
             for (--i; i > deathRecord; i--)
             {
                 using (BinaryReader messageDataReader = new BinaryReader(new MemoryStream(records[i].data)))
@@ -249,6 +258,18 @@ namespace deathreconstruction
                             droppedItems.Add(message.i_objectId);
                         }
                     }
+                    else if (opcode == PacketOpcode.PLAYER_DEATH_EVENT)
+                    {
+                        CM_Death.PlayerDeathEvent message = CM_Death.PlayerDeathEvent.read(messageDataReader);
+
+                        if (message.VictimId == character.ID)
+                        {
+                            if (message.KillerId >= 0x50000000 && message.KillerId <= 0x5FFFFFFF)
+                            {
+                                character.PlayerKill = true;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -264,6 +285,10 @@ namespace deathreconstruction
             if (message.CACQualities.CBaseQualities._intStatsTable.hashTable.ContainsKey(STypeInt.AUGMENTATION_LESS_DEATH_ITEM_LOSS_INT))
             {
                 character.DeathAugmentations = message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.AUGMENTATION_LESS_DEATH_ITEM_LOSS_INT];
+            }
+            if (message.CACQualities.CBaseQualities._intStatsTable.hashTable.ContainsKey(STypeInt.PLAYER_KILLER_STATUS_INT))
+            {
+                character.PKStatus = (PKStatusEnum)message.CACQualities.CBaseQualities._intStatsTable.hashTable[STypeInt.PLAYER_KILLER_STATUS_INT];
             }
 
             // pack items
@@ -316,20 +341,18 @@ namespace deathreconstruction
 
             uint id = message.object_id;
             Item item = new Item(id, message.wdesc);
-            // in world, stays in world
-            // in world, moves to inventory
-            // in inventory, stays in inventory
-            // in inventory, moves to world
 
             if (character.Contains(item.ContainerID) || character.ID == item.WielderID)
             {
+                // created within inventory
                 character.UpdateItem(item);
                 if (otherObjects.ContainsKey(id))
                 {
+                    // remove from world
                     otherObjects.Remove(id);
                 }
             }
-            else // goes to world
+            else // exists in world
             {
                 if (otherObjects.ContainsKey(id))
                 {
@@ -338,7 +361,7 @@ namespace deathreconstruction
                 }
                 else
                 {
-                    // spawned item in world
+                    // created item in world
                     otherObjects.Add(id, item);
                 }
             }
@@ -350,9 +373,10 @@ namespace deathreconstruction
 
             uint id = message.i_objectId;
             uint containerID = message.i_container;
+            ContainerProperties type = (ContainerProperties)message.i_type;
 
             Item item;
-            if (character.MoveItem(id, containerID, out item))
+            if (character.MoveItem(id, containerID, type != ContainerProperties.None, out item)) // in inventory
             {
                 // existing item needs to be moved into world
                 if (item != null)
@@ -360,7 +384,7 @@ namespace deathreconstruction
                     otherObjects.Add(item.ID, item);
                 }
             }
-            else if (otherObjects.TryGetValue(id, out item))
+            else if (otherObjects.TryGetValue(id, out item)) // in world
             {
                 if (character.Contains(containerID))
                 {
@@ -491,7 +515,7 @@ namespace deathreconstruction
             }
         }
 
-        private void UpdatePrivateQuality(BinaryReader messageDataReader, PacketOpcode opcode)
+        private void UpdatePrivateInt(BinaryReader messageDataReader, PacketOpcode opcode)
         {
             CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int> message = CM_Qualities.PrivateUpdateQualityEvent<STypeInt, int>.read(opcode, messageDataReader);
 
@@ -501,7 +525,17 @@ namespace deathreconstruction
             }
         }
 
-        private void UpdateQuality(BinaryReader messageDataReader, PacketOpcode opcode)
+        private void UpdateInt(BinaryReader messageDataReader, PacketOpcode opcode)
+        {
+            CM_Qualities.UpdateQualityEvent<STypeInt, int> message = CM_Qualities.UpdateQualityEvent<STypeInt, int>.read(opcode, messageDataReader);
+
+            if (message.sender == character.ID)
+            {
+                character.PKStatus = (PKStatusEnum)message.val;
+            }
+        }
+
+        private void UpdateInstanceID(BinaryReader messageDataReader, PacketOpcode opcode)
         {
             CM_Qualities.UpdateQualityEvent<STypeIID, uint> message = CM_Qualities.UpdateQualityEvent<STypeIID, uint>.read(opcode, messageDataReader);
 

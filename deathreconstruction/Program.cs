@@ -11,10 +11,6 @@ namespace deathreconstruction
             Util.initReaders();
 
             //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-15_1484535255_log.pcap";
-            //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\OlthoiPlayArwic.pcap";
-            //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-10_1484026681_log.pcap";
-            //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-10_1484107850_log.pcap";
-            //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-17_1484699075_log.pcap";
             //HypothesisTester tester = new HypothesisTester();
             //InventoryReconstructor reconstructor = new InventoryReconstructor();
             //List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(fileName);
@@ -26,11 +22,24 @@ namespace deathreconstruction
 
 
             HypothesisTester tester = new HypothesisTester();
+
+            string[] directoryFiles = Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap");
+
             int i = 0;
-            foreach (string fileName in Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap"))
+
+            string startFileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485152410_log.pcap";
+            for (i = 0; i < directoryFiles.Length; i++)
+            {
+                if (directoryFiles[i].Equals(startFileName))
+                {
+                    break;
+                }
+            }
+
+            for (; i < directoryFiles.Length; i++)
             {
                 InventoryReconstructor reconstructor = new InventoryReconstructor();
-                List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(fileName);
+                List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(directoryFiles[i]);
 
                 bool success = true;
                 foreach (Tuple<Character, List<uint>, string> deathRecord in foundDeaths)
@@ -39,11 +48,10 @@ namespace deathreconstruction
                     success = success && result;
                     Console.WriteLine();
                 }
-                i++;
-                if (!success)
-                {
-                    break;
-                }
+                //if (!success)
+                //{
+                //    break;
+                //}
             }
         }
 

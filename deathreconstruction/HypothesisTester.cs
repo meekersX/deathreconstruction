@@ -52,7 +52,10 @@ namespace deathreconstruction
                 {
                     if (item.BondedStatus == BondedStatusEnum.Normal_BondedStatus)
                     {
-                        if (item.Type != ITEM_TYPE.TYPE_MONEY && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE)
+                        if (item.Type != ITEM_TYPE.TYPE_MONEY
+                            && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE
+                            && item.Type != ITEM_TYPE.TYPE_MISC
+                            && item.Type != ITEM_TYPE.TYPE_TINKERING_TOOL)
                         {
                             valueMapping.Add(new Tuple<uint, Item>(item.Value / item.StackSize, item));
                         }
@@ -88,7 +91,7 @@ namespace deathreconstruction
                 droppedItems.Add(character.FindItem(droppedItemID));
             }
 
-            string pattern = @"^You've lost ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?(?: your ([^,]+),)*(?: and your ([^,]+)){0,1}!$";
+            string pattern = @"^You've lost(?: ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?)?(?: your ([^,]+),)*(?: and your ([^,]+)){0,1}!$";
             Match match = Regex.Match(deathText, pattern);
 
             List<string> parsedItems = new List<string>(droppedItemIDs.Count + 1);
@@ -108,13 +111,16 @@ namespace deathreconstruction
             }
 
             // verify pyreal count
-            if (!droppedPyreals.ToString("N0").Equals(parsedItems[0]))
+            if (!droppedPyreals.ToString("N0").Equals(parsedItems[0]) && (droppedPyreals > 0 || parsedItems[0].Contains("Pyreal")))
             {
                 Console.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + parsedItems[0]);
                 return false;
             }
+            if (droppedPyreals > 0)
+            {
+                parsedItems.RemoveAt(0);
+            }
             //Console.WriteLine("Pyreals good");
-            parsedItems.RemoveAt(0);
 
             // check we found all death drops
             if (droppedItems.Count != parsedItems.Count)
@@ -143,7 +149,7 @@ namespace deathreconstruction
             //Console.WriteLine("Names good");
 
             bool wielded = false;
-            if (character.Level > 35)
+            if (character.Level > 35 || (character.PlayerKill && character.PKStatus == PKStatusEnum.PK_PKStatus))
             {
                 wielded = true;
             }
@@ -209,30 +215,52 @@ namespace deathreconstruction
             parsedItems.RemoveRange(0, numberAlwaysDropped);
 
             // ensure number of normal dropped in range
-            // TODO: adjust for PVP deaths
             int droppedItemsMin;
             int droppedItemsMax;
-            if (character.Level <= 5)
+            if (!character.PlayerKill || character.PKStatus != PKStatusEnum.PK_PKStatus)
             {
-                droppedItemsMin = 0;
-                droppedItemsMax = 0;
+                if (character.Level <= 10)
+                {
+                    droppedItemsMin = 0;
+                    droppedItemsMax = 0;
+                }
+                else if (character.Level <= 20)
+                {
+                    droppedItemsMin = 1;
+                    droppedItemsMax = 1;
+                }
+                else // character.Level > 20
+                {
+                    droppedItemsMin = character.Level / 20;
+                    droppedItemsMax = droppedItemsMin + 2;
+                }
+                if (character.DeathAugmentations > 0)
+                {
+                    droppedItemsMin -= character.DeathAugmentations * 5;
+                    droppedItemsMax -= character.DeathAugmentations * 5;
+                    droppedItemsMin = Math.Max(droppedItemsMin, 0);
+                    droppedItemsMax = Math.Max(droppedItemsMax, 0);
+                }
             }
-            else if (character.Level <= 20)
+            else // PK death
             {
-                droppedItemsMin = 1;
-                droppedItemsMax = 1;
-            }
-            else // character.Level > 20
-            {
-                droppedItemsMin = character.Level / 20;
-                droppedItemsMax = droppedItemsMin + 2;
-            }
-            if (character.DeathAugmentations > 0)
-            {
-                droppedItemsMin -= character.DeathAugmentations * 5;
-                droppedItemsMax -= character.DeathAugmentations * 5;
-                droppedItemsMin = Math.Max(droppedItemsMin, 0);
-                droppedItemsMax = Math.Max(droppedItemsMax, 0);
+                if (character.Level >= 10)
+                {
+                    droppedItemsMin = (Math.Min(character.Level, 126) + 9) / 10;
+                }
+                else
+                {
+                    droppedItemsMin = 0;
+                }
+                if (character.Level >= 10)
+                {
+                    droppedItemsMax = droppedItemsMin + 2;
+                }
+                else
+                {
+                    droppedItemsMax = droppedItemsMin;
+                }
+
             }
 
             if (droppedItems.Count < droppedItemsMin || droppedItems.Count > droppedItemsMax)

@@ -11,6 +11,8 @@ namespace deathreconstruction
         public int Level;
         public string Name;
         public int DeathAugmentations;
+        public PKStatusEnum PKStatus;
+        public bool PlayerKill;
 
         private Dictionary<uint, Item> inventory;
         private Dictionary<uint, Item> packs;
@@ -24,6 +26,8 @@ namespace deathreconstruction
             Level = 0;
             Name = "";
             DeathAugmentations = 0;
+            PKStatus = PKStatusEnum.NPK_PKStatus;
+            PlayerKill = false;
             inventory = new Dictionary<uint, Item>();
             packs = new Dictionary<uint, Item>();
             unloadedItems = new List<uint>();
@@ -36,6 +40,8 @@ namespace deathreconstruction
             Level = characterToCopy.Level;
             Name = characterToCopy.Name;
             DeathAugmentations = characterToCopy.DeathAugmentations;
+            PKStatus = characterToCopy.PKStatus;
+            PlayerKill = characterToCopy.PlayerKill;
             inventory = characterToCopy.inventory.ToDictionary(x => x.Key, x => x.Value.Copy());
             packs = characterToCopy.packs.ToDictionary(x => x.Key, x => x.Value.Copy());
 
@@ -207,7 +213,7 @@ namespace deathreconstruction
             item.ContainerID = containerID;
         }
 
-        public bool MoveItem(uint itemID, uint containerID, out Item item)
+        public bool MoveItem(uint itemID, uint containerID, bool pack, out Item item)
         {
             if (inventory.TryGetValue(itemID, out item))
             {
@@ -217,6 +223,11 @@ namespace deathreconstruction
                 item.WielderID = 0x0;
                 if (containerID == ID || packs.ContainsKey(containerID))
                 {
+                    if (pack)
+                    {
+                        packs.Add(item.ID, item);
+                        inventory.Remove(item.ID);
+                    }
                     // still within inventory, done
                     item = null;
                 }
@@ -224,6 +235,29 @@ namespace deathreconstruction
                 {
                     // removed from inventory
                     inventory.Remove(itemID);
+                }
+                return true;
+            }
+            else if (packs.TryGetValue(itemID, out item))
+            {
+                // new container
+                item.ContainerID = containerID;
+                // unwield
+                item.WielderID = 0x0;
+                if (containerID == ID || packs.ContainsKey(containerID))
+                {
+                    if (!pack)
+                    {
+                        inventory.Add(item.ID, item);
+                        packs.Remove(item.ID);
+                    }
+                    // still within inventory, done
+                    item = null;
+                }
+                else
+                {
+                    // removed from packs
+                    packs.Remove(itemID);
                 }
                 return true;
             }

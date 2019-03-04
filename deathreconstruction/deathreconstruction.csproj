@@ -58,6 +58,7 @@
     <Compile Include="Enums\Movement.cs" />
     <Compile Include="Message Processors\CM_Character.cs" />
     <Compile Include="Message Processors\CM_Communication.cs" />
+    <Compile Include="Message Processors\CM_Death.cs" />
     <Compile Include="Message Processors\CM_House.cs" />
     <Compile Include="Message Processors\CM_Inventory.cs" />
     <Compile Include="Message Processors\CM_Login.cs" />
