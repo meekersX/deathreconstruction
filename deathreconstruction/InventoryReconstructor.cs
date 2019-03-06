@@ -122,8 +122,11 @@ namespace deathreconstruction
 
                 if (i == lastDeathRecord)
                 {
-                    // add death record
-                    foundDeaths.Add(new Tuple<Character, List<uint>, string>(new Character(character), droppedItems, deathText));
+                    if (deathText != null)
+                    {
+                        // add death record
+                        foundDeaths.Add(new Tuple<Character, List<uint>, string>(new Character(character), droppedItems, deathText));
+                    }
 
                     deathIndex++;
                     if (deathIndex >= deathRecords.Count)
@@ -227,12 +230,12 @@ namespace deathreconstruction
                 if (deathText == null)
                 {
                     // couldn't find death text
-                    return new Tuple<List<uint>, string, int>(new List<uint>(), "<Couldn't find Death Text>", 0);
+                    return new Tuple<List<uint>, string, int>(new List<uint>(), null, deathRecord);
                 }
             }
             else
             {
-                return new Tuple<List<uint>, string, int>(new List<uint>(), "<PKLite Death>", lastDeathRecord);
+                return new Tuple<List<uint>, string, int>(new List<uint>(), "<PKLite Death>", deathRecord);
             }
 
             deathTextRecord = i;

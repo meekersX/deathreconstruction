@@ -10,28 +10,22 @@ namespace deathreconstruction
         {
             Util.initReaders();
 
-            //string fileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-15_1484535255_log.pcap";
-            //HypothesisTester tester = new HypothesisTester();
-            //InventoryReconstructor reconstructor = new InventoryReconstructor();
-            //List<Tuple<Character, List<uint>, string>> foundDeaths = reconstructor.Reconstruct(fileName);
-            //foreach (Tuple<Character, List<uint>, string> deathRecord in foundDeaths)
+            string[] directoryFiles = Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap");
+            //string[] directoryFiles =
             //{
-            //    tester.Test(deathRecord.Item1, deathRecord.Item2, deathRecord.Item3);
-            //    Console.WriteLine();
-            //}
-
-
-            //string[] directoryFiles = Directory.GetFiles("C:\\Build\\deathreconstruction\\deathreconstruction\\bin\\Debug\\Data", "*.pcap");
-            string[] directoryFiles =
-            {
-                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485046869_log.pcap",
-                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485735010_log.pcap",
-                @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485741839_log.pcap",
-            };
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-25_1485398536_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-26_1485492633_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-27_1485590311_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-30_1485795672_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-30_1485828642_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485046869_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485735010_log.pcap",
+            //    @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-29_1485741839_log.pcap",
+            //};
 
             int i = 0;
 
-            //string startFileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-31_1485843405_log.pcap";
+            //string startFileName = @"C:\Build\deathreconstruction\deathreconstruction\bin\Debug\Data\pkt_2017-1-22_1485152410_log.pcap";
             //for (i = 0; i < directoryFiles.Length; i++)
             //{
             //    if (directoryFiles[i].Equals(startFileName))

@@ -71,31 +71,31 @@ namespace deathreconstruction
                 {
                     if (item.BondedStatus == BondedStatusEnum.Normal_BondedStatus)
                     {
-                        // exclude starting Leather Boots
-                        if (item.Wcid == 115 && item.Value == 1100 && item.Name == "Leather Boots")
-                        {
-                            continue;
-                        }
-                        // exclude starting Training Shortbow
-                        if (item.Wcid == 12741)
-                        {
-                            continue;
-                        }
-                        // exclude starting Loose Breeches
-                        if (item.Wcid == 2602 && item.Value == 20 && item.Name == "Loose Breeches")
-                        {
-                            continue;
-                        }
-                        // exclude starting Flared Shirt
-                        if (item.Wcid == 2588 && item.Value == 15 && item.Name == "Flared Shirt")
-                        {
-                            continue;
-                        }
-                        // exclude starting Arrow
-                        if (item.Wcid == 31717)
-                        {
-                            continue;
-                        }
+                        //// exclude starting Leather Boots
+                        //if (item.Wcid == 115 && item.Value == 1100 && item.Name == "Leather Boots")
+                        //{
+                        //    continue;
+                        //}
+                        //// exclude starting Training Shortbow
+                        //if (item.Wcid == 12741)
+                        //{
+                        //    continue;
+                        //}
+                        //// exclude starting Loose Breeches
+                        //if (item.Wcid == 2602 && item.Value == 20 && item.Name == "Loose Breeches")
+                        //{
+                        //    continue;
+                        //}
+                        //// exclude starting Flared Shirt
+                        //if (item.Wcid == 2588 && item.Value == 15 && item.Name == "Flared Shirt")
+                        //{
+                        //    continue;
+                        //}
+                        //// exclude starting Arrow
+                        //if (item.Wcid == 31717)
+                        //{
+                        //    continue;
+                        //}
                         if (item.Type != ITEM_TYPE.TYPE_MONEY
                             && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE
                             && item.Type != ITEM_TYPE.TYPE_MISC
@@ -147,33 +147,39 @@ namespace deathreconstruction
             string pattern = @"^You've lost(?: ([1-9][0-9]{0,2}(?:,[0-9]{3})*) Pyreals?,?)?(?: your ([^,]+),?)*(?: and your ([^,]+))?!$";
             Match match = Regex.Match(deathText, pattern);
 
-            List<string> parsedItems = new List<string>(droppedItemIDs.Count + 1);
-            for (i = 1; i < match.Groups.Count; i++)
-            {
-                foreach (Capture capture in match.Groups[i].Captures)
-                {
-                    parsedItems.Add(capture.Value);
-                }
-            }
-
             uint droppedPyreals = 0;
-
             if (character.Level >= 5)
             {
                 droppedPyreals = (TotalPyreals() + 1) / 2;
             }
 
             // verify pyreal count
-            if (!droppedPyreals.ToString("N0").Equals(parsedItems[0]) && (droppedPyreals > 0 || parsedItems[0].Contains("Pyreal")))
+            if (match.Groups[1].Success == true)
             {
-                output.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + parsedItems[0]);
-                return false;
+                if (!droppedPyreals.ToString("N0").Equals(match.Groups[1].Value))
+                {
+                        output.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + match.Groups[1].Value);
+                        return false;
+                }
             }
-            if (droppedPyreals > 0)
+            else // match.Groups[1].Success == false
             {
-                parsedItems.RemoveAt(0);
+                if (droppedPyreals > 0)
+                {
+                    output.WriteLine("Pyreals predicted: " + droppedPyreals.ToString("N0") + " actual: " + match.Groups[1].Value);
+                    return false;
+                }
             }
             //output.WriteLine("Pyreals good");
+
+            List<string> parsedItems = new List<string>(droppedItemIDs.Count + 1);
+            for (i = 2; i < match.Groups.Count; i++)
+            {
+                foreach (Capture capture in match.Groups[i].Captures)
+                {
+                    parsedItems.Add(capture.Value);
+                }
+            }
 
             // check we found all death drops
             if (droppedItems.Count < parsedItems.Count)
