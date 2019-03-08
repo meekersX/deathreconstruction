@@ -97,11 +97,11 @@ namespace deathreconstruction
                         //    continue;
                         //}
                         if (item.Type != ITEM_TYPE.TYPE_MONEY
-                            && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE
-                            && item.Type != ITEM_TYPE.TYPE_MISC
-                            && item.Type != ITEM_TYPE.TYPE_TINKERING_TOOL
-                            && item.Type != ITEM_TYPE.TYPE_FOOD
-                            && item.Type != ITEM_TYPE.TYPE_CRAFT_FLETCHING_INTERMEDIATE)
+                            && item.Type != ITEM_TYPE.TYPE_PROMISSORY_NOTE)
+                            //&& item.Type != ITEM_TYPE.TYPE_MISC
+                            //&& item.Type != ITEM_TYPE.TYPE_TINKERING_TOOL
+                            //&& item.Type != ITEM_TYPE.TYPE_FOOD
+                            //&& item.Type != ITEM_TYPE.TYPE_CRAFT_FLETCHING_INTERMEDIATE)
                         {
                             valueMapping.Add(new Tuple<uint, Item>(item.Value / item.StackSize, item));
                         }
